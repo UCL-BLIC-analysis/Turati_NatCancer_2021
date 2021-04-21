@@ -1,0 +1,302 @@
+---
+title: "CNV analysis with copynumber"
+author: "Javier Herrero"
+date: "`r date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r setup, message = FALSE}
+library(knitr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(ggplot2)
+library(DT)
+opts_chunk$set(cache=TRUE)
+opts_chunk$set(autodep = TRUE)
+
+library(copynumber)
+source("cnv_analysis.lib.R")
+source("plots.R")
+```
+
+```{r data_setup, cache = T}
+Patient <- "Pt6"
+gender <- "male" # "male" or "female", for renormalisation
+sample_type <- "dia" # "dia" for diagnosis, "PDX" for PDXs
+bin_size <- "100k"
+```
+
+```{r winsorisation_setup, cache = T}
+# Variables for copynumber processing
+winsorize_k <- 15
+```
+
+# Sample `r Patient` `r ifelse(sample_type == "dia", "diagnosis", "PDX")` with bin size `r bin_size`
+
+This document contains the analysis on the CNA events found by Ginkgo on a set of single cell WGS data. The data are re-analised with copynumber.
+
+## Data processing
+
+We use the files listed below, which have been GC-corrected by Ginkgo. This is the result of aligning the reads with bowtie2 to the hg19 (GRCh37) human assembly. Reads with a mapping quality >= 30 are used to count the number of reads in variable bins of `r bin_size` of mappable genome. So-called bad bins are removed and the remaining are GC-corrected with a lowess fit. *SegNorm* files contain the GC corrected and normalised raw data while *SegCopy* files contain the copy number value estimated by Ginkgo.
+
+```{r data_processing.set_params, warning = FALSE, message = FALSE}
+html_file <- paste0("cnv_data_processing_", Patient, "_", sample_type, "_", bin_size, ".html")
+data_file <- paste0("data_", Patient, "_", sample_type, "_", bin_size, ".rda")
+```
+
+```{r data_processing.render, warning = FALSE, message = FALSE, cache = TRUE, cache.extra=file.info("cnv_data_processing.Rmd")$mtime}
+## This block is cached and depends on the last modification time of the cnv_data_processing.Rmd
+## file. If this changes, this block will be re-run. In essence, this chunk of code knits
+## the cnv_data_processing.Rmd file with the relevant parameters for this analysis (Patient, bin_size, etc.)
+## One of the outputs of this script if the data file (data_"Patient"_"bin_size".rda)
+library(rmarkdown)
+rmarkdown::render("cnv_data_processing.Rmd",
+                  output_file = html_file,
+                  output_format = "html_document",
+                  quiet = TRUE,
+                  params = list(
+                    Patient = Patient,
+                    gender = gender,
+                    sample_type = sample_type,
+                    data_dir = "../data/",
+                    bin_size = bin_size,
+                    min_lorenz = 0.35,
+                    max_mapd = 0.7,
+                    min_num_reads = 500000,
+                    min_median_reads = 10,
+                    data_file = data_file
+                  ))
+```
+
+```{r data_processing.load_data, warning = FALSE, message = FALSE, cache.extra=file.info(data_file)$mtime}
+## Reads the output file from the cnv_data_processing.Rmd script. This includes the
+## rawdata_data (original number of reads per bin),
+## segnorm_data (normlised and corrected counts taking into account GC content),
+## segfixed_data (segmented data: runs of bins with the same value according to the segmentation)
+## segcopy_data (rounded segfixed_data, the final CN states called by Ginkgo)
+load(data_file)
+# Reload the libraries in case these have changed since last time the data processing Rmd was run
+source("cnv_analysis.lib.R")
+source("plots.R")
+```
+
+You can see the results of processing the data in [here](`r html_file`).
+
+# Copy Number Segmentation
+
+The resulting values are used with the ``copynumber`` R package. Count values are transformed into log(R) by dividing by the median (visual inspection confirmed that the distributions were mono-modal) which is assumed to correspond to CN = 2 and taking the log value. Outliers are filtered using the winsorize function with k=`r winsorize_k`. Lastly, a piecewise constant segmentation curve is fitted with the ``pcf`` method with a range of gamma values
+
+Note that while this choice of parameters work well in most cases, some cells might benefit from a more stringent smoothing of the data.
+
+The result is transformed into CN value by reverting the previous transformation, i.e. CN = exp(x) * 2.
+
+```{r winsorization, cache = TRUE}
+## Use the data from Ginkgo, after the filtering
+norm.data <- segrenorm_data
+
+## Set values to 1 on bins larger than 2,000,000 bp (centromeres and the like)
+norm.data[(norm.data[, "END"] - norm.data[, "START"]) > 2000000, -c(1:3)] <- 1
+
+## copynumber package requires short chromosome names!! (i.e. no "chr")
+norm.data <- norm.data %>% mutate(CHR = sub("chr", "", CHR))
+
+## copynumber package is designed for probes with just one coordinate:
+## Make this the midpoint of each bin
+norm.data <- norm.data %>% mutate(START = (START + END) / 2)
+norm.data <- norm.data %>% select(-END)
+
+## Transform the norm data into logR. Note that norm.data are GC-corrected ratios of counts,
+## so no need to divide by the mean or median
+logR.data <- norm.data %>% mutate_at(-c(1:2), log2)
+
+# Winsorization (from copynumber package) is used to remove outliers
+wins.data <- winsorize(logR.data, k = winsorize_k, return.outliers = F, verbose = F)
+```
+
+## Single-sample mode {.tabset}
+
+The piecewise constant segmentation can be run in two different modes: the first one is to consider each sample independently (``pcf``) and the second one is to consider all samples at once when defining breakpoints (``multipcf``). The results below correspond to the first mode, considering one sample at a time.
+
+```{r}
+cells <- colnames(segcopy_data)[-c(1:3)]
+fig.height <- min(10, 0.8 + length(cells) * 0.07)
+```
+
+```{r single_pcf, cache = TRUE, dependson="winsorization"}
+## Assumed ploidy
+ploidy <- 2
+
+## Correcting the ploidy by each cell
+## ploidy <- read.table("../data/ploidy.txt", header = T, sep = "\t")
+## ploidy <- ploidy[ploidy$Sample %in% colnames(segcopy_data),]
+## ploidy_normal <- ploidy[which(round(ploidy$Copy_Number) == 2),]
+
+## PCF function (copynumber package) adjusts a piece-wise constant function on the data.
+## The main parameter here is gamma which is a penalty to pay for each break in the PCF
+
+##------------------------
+## Run PCF for different gamma values and store the results in a couple of lists.
+single.seg.list <- list()
+single.seg.estimates.list <- list()
+for (gamma in c("05", "10", "15", "20")) {
+  ## PCF returns 2 data frames (when return.est = T). The DF estimates contains the location
+  ## and CN estimate for each bin, which is the mean of the segment where the bin is located
+  single.seg.list[[gamma]] <- pcf(data = as.data.frame(wins.data),
+                                  gamma = as.numeric(gamma),
+                                  verbose = F, return.est = T, fast = F)
+  single.seg.estimates.list[[gamma]] <-
+    cbind(segrenorm_data[, 1:3],
+          round(ploidy * 2 ^ (single.seg.list[[gamma]]$estimates[, -c(1:2)])))
+          ## round(sweep(2^(single.seg.list[[gamma]]$estimates[,-c(1:2)]), 2, as.numeric(ploidy$Copy_Number), '*')))
+}
+##------------------------
+```
+
+```{r single_pcf.save_data}
+saveRDS(single.seg.estimates.list, paste0("cnv_copynumber_", Patient, "_", sample_type, "_", bin_size, ".single_renorm.RDS"))
+```
+
+```{r plot_single_pcf, cache = TRUE, results="asis", dependson="single_pcf"}
+## ============================================================================
+## First loop: Tabset for gamma values
+## ============================================================================
+for (gamma in names(single.seg.estimates.list)) {
+  # Print the DIV blocks for each level 3 tab (one for each gamma value)
+  cat(paste0('<div id="plot-', gamma, '" class="section level3 tabset"><h3>G=', gamma, '</h3>'))
+  plotGenome(single.seg.estimates.list[[gamma]], showBins = T,
+            Treatment = meta_data[cells, "Treatment"],
+            Sample = meta_data[cells, "Mouse"],
+            Day = meta_data[cells, "Day"],
+            Library = meta_data[cells, "Library"])
+  title(main = paste0("Single-sample segmentation (", Patient, "; ", bin_size, "; gamma=", as.numeric(gamma), ")"))
+
+  ## ----------------------------------------------------------------------------
+  ## Second loop: tabset for chromosomes with this gamma value
+  ## ----------------------------------------------------------------------------
+  cat(paste0('<h4>Chromosome plots for Gamma = ', gamma, ':</h4>'))
+  for (chr in paste0("chr", c(1:22, "X", "Y"))) {
+    # Print the DIV blocks for each level 4 tab (one for each chromosome)
+    cat(paste0('<div id="plot-', gamma, '-', chr, '" class="section level4">
+  <h4>', chr, '</h4>'))
+    plotChr(single.seg.estimates.list[[gamma]], chr,
+            # tree = full.tree,
+            Treatment = meta_data[cells, "Treatment"],
+            Sample = meta_data[cells, "Mouse"],
+            Day = meta_data[cells, "Day"],
+            Library = meta_data[cells, "Library"])
+    title(main = paste0("All cells -- ", chr, " (", Patient, "; ", bin_size, "; gamma=", as.numeric(gamma), ")"))
+    cat('</div>', fill = T)
+  }
+  ## ----------------------------------------------------------------------------
+
+  cat('</div>', fill = T)
+}
+## ============================================================================
+```
+
+```{r fig.height=2, fig.width = 9, echo = F}
+plotAnnotationLegend(cex.titles = 0.8, cex.items = 0.5, 
+          Treatment = meta_data[cells, "Treatment"],
+          Sample = meta_data[cells, "Mouse"],
+          Day = meta_data[cells, "Day"],
+          Library = meta_data[cells, "Library"])
+```
+
+
+## Multi-sample copy number segmentation {.tabset}
+
+The piecewise constant segmentation can be run in two different modes: the first one is to consider each sample independently (``pcf``) and the second one is to consider all samples at once when defining breakpoints (``multipcf``). The results below correspond to the second mode, considering all samples at once.
+
+```{r multiple_pcf, cache = TRUE, dependson="winsorization"}
+## Assumed ploidy
+ploidy <- 2
+
+## Just use the same winsorised data as before (with same pre-processing)
+multi.wins.data <- wins.data
+
+##------------------------
+## Remove bins from arms where there is just one bin. This is because multipcf form the copynumber
+## package throws an error otherwise.
+null <- lazyLoad(sub(".rdb", "", system.file("R", "sysdata.rdb", package = "copynumber")))
+mins <- tapply(hg19$V2, paste0(hg19[, 1], arm=substr(hg19[, 4], 1, 1)), min)
+maxs <- tapply(hg19$V3, paste0(hg19[, 1], arm=substr(hg19[, 4], 1, 1)), max)
+arms <- data.frame(chr=sub("chr(.+)[pq]", "\\1", names(mins)), arm=sub("chr.+([pq])", "\\1", names(mins)), mins, maxs)
+multi.wins.data.arms <- apply(multi.wins.data, 1, function(x) {rownames(arms)[which(arms$chr == x[1] & arms$mins <= as.numeric(x[2]) & arms$maxs >= as.numeric(x[2]))]})
+bad.rows <- which(multi.wins.data.arms %in% names(which(table(multi.wins.data.arms) < 2)))
+multi.wins.data <- multi.wins.data[-c(bad.rows), ]
+##------------------------
+
+##------------------------
+## Run PCF for different gamma values and store the results in a couple of lists.
+multi.seg.list <- list()
+multi.seg.estimates.list <- list()
+if (ncol(multi.wins.data) >= 4) {
+  for (gamma in c("05", "06", "07", "08", "09", "10", "15")) {
+    multi.seg.list[[gamma]] <- multipcf(data = multi.wins.data,
+                                        gamma = as.numeric(gamma),
+                                        verbose = F, return.est = T, fast = T)
+    multi.seg.estimates.list[[gamma]] <-
+      cbind(segrenorm_data[-c(bad.rows), 1:3],
+            round(ploidy * 2 ^ (multi.seg.list[[gamma]]$estimates[, -c(1:2)])))
+            ## round(sweep(2^(multi.seg.list[[gamma]]$estimates[,-c(1:2)]), 2, as.numeric(ploidy$Copy_Number), '*'))
+  }
+}
+```
+
+```{r multi_pcf.save_data}
+saveRDS(multi.seg.estimates.list, paste0("cnv_copynumber_", Patient, "_", sample_type, "_", bin_size, ".multi_seg_renorm.RDS"))
+```
+
+```{r plot_multi_pcf, cache = TRUE, results="asis", dependson="multiple_pcf"}
+## ============================================================================
+## First loop: Tabset for gamma values
+## ============================================================================
+for (gamma in names(multi.seg.estimates.list)) {
+  # Print the DIV blocks for each level 3 tab (one for each gamma value)
+  cat(paste0('<div id="plot-multi-', gamma, '" class="section level3 tabset"><h3>G=', gamma, '</h3>'))
+  plotGenome(multi.seg.estimates.list[[gamma]], showBins = T,
+            Treatment = meta_data[cells, "Treatment"],
+            Sample = meta_data[cells, "Mouse"],
+            Day = meta_data[cells, "Day"],
+            Library = meta_data[cells, "Library"])
+  title(main = paste0("Multi-sample segmentation (", Patient, "; ", bin_size, "; gamma=", as.numeric(gamma), ")"))
+
+  ## ----------------------------------------------------------------------------
+  ## Second loop: tabset for chromosomes with this gamma value
+  ## ----------------------------------------------------------------------------
+  cat(paste0('<h4>Chromosome plots for Gamma = ', gamma, ':</h4>'))
+  for (chr in paste0("chr", c(1:22, "X", "Y"))) {
+    # Print the DIV blocks for each level 4 tab (one for each chromosome)
+    cat(paste0('<div id="plot-multi-', gamma, '-', chr, '" class="section level4">
+  <h4>', chr, '</h4>'))
+    plotChr(multi.seg.estimates.list[[gamma]], chr,
+            # tree = full.tree,
+            Treatment = meta_data[cells, "Treatment"],
+            Sample = meta_data[cells, "Mouse"],
+            Day = meta_data[cells, "Day"],
+            Library = meta_data[cells, "Library"])
+    title(main = paste0("All cells -- ", chr, " (", Patient, "; ", bin_size, "; gamma=", as.numeric(gamma), ")"))
+    cat('</div>', fill = T)
+  }
+  ## ----------------------------------------------------------------------------
+
+  cat('</div>', fill = T)
+}
+## ============================================================================
+```
+
+
+----
+
+# About
+
+```{r footer}
+sessionInfo()
+```
+
+Document generated on `r date()`

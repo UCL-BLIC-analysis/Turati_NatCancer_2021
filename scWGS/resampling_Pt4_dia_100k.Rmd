@@ -1,0 +1,338 @@
+---
+title: "Pt4 resampling analysis"
+author: "Javier Herrero"
+date: "`r date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r}
+knitr::read_chunk("resampling_chunks.R")
+```
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(cowplot)
+library(ggExtra)
+library(knitr)
+library(optrees)
+library(mclust)
+library(DT)
+
+knitr::opts_chunk$set(echo = TRUE)
+opts_chunk$set(cache=TRUE)
+opts_chunk$set(cache.lazy=FALSE)
+opts_chunk$set(autodep = TRUE)
+
+source("plots.R")
+source("cnv_analysis.lib.R")
+source("resampling_functions.R")
+```
+
+```{r set_seed}
+set.seed(123456)
+```
+
+# Input data {.tabset}
+
+```{r read_input, results = "asis"}
+single_seg_renorm <- readRDS("cnv_copynumber_Pt4_dia_100k.single_seg_renorm_diagnosticonly.RDS")
+multi_seg_renorm <- readRDS("cnv_copynumber_Pt4_dia_100k.multi_seg_renorm_diagnosticonly.RDS")
+library(xlsx)
+meta_data <- read.xlsx(paste0("../data/Samples.xlsx"), sheetIndex = 1)
+cells <- meta_data %>% filter(Day == "Diagnosis" & Patient == "Pt4") %>% pull(Cell) %>% as.character()
+cells <- intersect(colnames(multi_seg_renorm[["05"]][, -c(1:3)]), cells)
+multi_seg_renorm[["05"]] <- multi_seg_renorm[["05"]][, c("CHR", "START", "END", cells)]
+single_seg_renorm[["10"]] <- single_seg_renorm[["10"]][, c("CHR", "START", "END", cells)]
+```
+
+There are `r length(cells)` cells in this dataset.
+
+```{r define_cnvs, results = "asis"}
+plotGenome(multi_seg_renorm[['05']])
+plotGenome(single_seg_renorm[['10']])
+plotFrequency(multi_seg_renorm[['05']])
+plotFrequency(single_seg_renorm[['10']])
+for (this_chr in paste0("chr", c(1:22, "X"))) {
+  if (!is.null(opts_knit$get("output.dir"))) {
+    cat(knit_child(text = paste0("\n## ", this_chr, "\n\n"), quiet = T))
+  }
+  plotChr(multi_seg_renorm[['05']], this_chr)
+  plotChr(single_seg_renorm[['10']], this_chr)
+}
+
+curated_cnv_table <- read_csv("curated_cnv_table.Pt4_dia.csv")
+
+cnv_table <- as.tibble(curated_cnv_table) %>% filter(keep == TRUE)
+```
+
+```{r get_signal_matrix}
+data_env <- new.env()
+load("data_Pt4_dia_100k_diagnosticonly.rda", envir = data_env)
+segrenorm_data <- data_env$segrenorm_data
+rm(data_env)
+segrenorm_data <- segrenorm_data[, c("CHR", "START", "END", cells)]
+
+## Adjust for ploidy:
+# 1. read ploidy data (from Ginkgo)
+ploidy <- read.table("../data/100k/ploidy.txt", header = T, row.names = 1)
+# 2. Multiply signal (ca.1 centered) by ploidy
+segrenorm_data[, -c(1:3)] <- sweep(segrenorm_data[, -c(1:3)], 2,
+                                   ploidy[colnames(segrenorm_data)[-c(1:3)], ], "*")
+# 2. Divide signal by 2 (to make it 1 centered again, after ploidy adjustment)
+segrenorm_data[, -c(1:3)] <- sweep(segrenorm_data[, -c(1:3)], 2, 2, "/")
+
+old_signal_matrix <- matrix(0, nrow = ncol(segrenorm_data) - 3, ncol = nrow(cnv_table))
+colnames(old_signal_matrix) <- paste0("V", 1:ncol(old_signal_matrix))
+for (i in 1:nrow(cnv_table)) {
+  this_cnv <- cnv_table[i, , drop = T]
+
+  old_signal_matrix[, i] <- segrenorm_data %>%
+    filter(CHR == this_cnv$chr & START >= this_cnv$start & END <= this_cnv$end) %>%
+    select(-c(1:3)) %>%
+    colMeans() * 2
+}
+cns <- cnv_table$n
+```
+
+
+# Curated CN events before resampling {.tabset}
+
+```{r set_starting_thresholds, dependson = c("get_signal_matrix")}
+starting_thresholds <- list(
+  mean = cnv_table$threshold,
+  sd = cnv_table$sd)
+```
+
+```{r, cache = F}
+DT::datatable(cnv_table)
+```
+
+```{r no-initial_density_plots, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime, dependson=c("define_cnvs", "get_signal_matrix", "set_starting_thresholds")}
+```
+
+
+```{r cache=F}
+# knitr::knit_exit()
+```
+
+
+<!--
+# Scatter plot
+
+```{r no-pairwise_scatterplots, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime, dependson=c("define_cnvs", "get_signal_matrix", "set_starting_thresholds")}
+```
+-->
+
+```{r cache=F}
+# knitr::knit_exit()
+```
+
+
+# Reconstruct the tree
+
+## Naive tree
+
+```{r naive_tree, dependson=c("set_seed", "define_cnvs", "get_signal_matrix", "set_starting_thresholds"), cache.extra = file.info("resampling_functions.R")$mtime}
+source("resampling_functions.R")
+original_segcopy_data <- round(old_signal_matrix)
+events_table <- as_tibble(rbind(2, original_segcopy_data)) %>%
+  mutate_all(function(x) {ifelse(x == 2, 0, 1)})
+unique_clones <- events_table %>%
+  group_by_all() %>% summarise(num.cells = n())
+print(paste(0, NA, nrow(unique_clones), NA, sum(events_table)))
+naive_tree <- get_tree_from_data_matrix(original_segcopy_data, plot = T)
+apply(old_signal_matrix, 2, range)
+```
+
+## Resampling tree
+
+```{r resampling_tree, dependson=c("set_seed", "define_cnvs", "get_signal_matrix", "set_starting_thresholds"), cache.extra = file.info("resampling_functions.R")$mtime}
+best_sample_data <- resample_matrix(
+  old_signal_matrix, starting_thresholds = starting_thresholds,
+  cns, num_loops = 10, num_samples = 1000, num_best = 100,
+  plot_intermediate_trees = F, use_num_events = F)
+best_sample_thresholds <- attr(best_sample_data, "thresholds")
+resampled_segcopy_data <- round(apply(best_sample_data, 1:2, mean))
+event_sizes <- cnv_table$end - cnv_table$start + 1
+tree.arcs <- get_tree_from_data_matrix(
+  resampled_segcopy_data, plot = T, event_sizes = event_sizes)
+
+apply(best_sample_data, 1:2, mean) %>% as_tibble() %>% gather() %>%
+  mutate(key = sub("V","", key)) %>%
+  ggplot +
+  # geom_violin(aes(x = key, y = value), bw = 0.1, col = "grey") +
+  geom_dotplot(aes(x = key, y = value), binaxis = "y",
+               stackdir = "center", binwidth = 0.01) +
+  scale_x_discrete(limits = 1:ncol(resampled_segcopy_data))
+
+apply(best_sample_data, 1:2, mean) %>% as_tibble() %>% gather() %>%
+  mutate(key = sub("V","", key)) %>%
+  ggplot +
+  geom_violin(aes(x = key, y = value), bw = 0.1, col = "grey") +
+  geom_dotplot(aes(x = key, y = value), binaxis = "y",
+               stackdir = "center", binwidth = 0.01) +
+  scale_x_discrete(limits = 1:ncol(resampled_segcopy_data))
+
+colSums(!apply(best_sample_data, 1:2, function(x){all(x == x[1])}))
+```
+
+```{r, cache = F, eval = F}
+# saveRDS(best_sample_data, "best_sample_data.rds")
+# knitr::knit_exit()
+best_sample_data <- readRDS("best_sample_data.rds")
+resampled_segcopy_data <- round(apply(best_sample_data, 1:2, mean))
+tree.arcs <- get_tree_from_data_matrix(resampled_segcopy_data, plot = T)
+```
+
+<!--
+# QC
+
+```{r no-compare_original_segcopy_data_to_final_data_matrix, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+-->
+
+# CN events per clone {.tabset}
+
+```{r genome_plots_with_clones, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Density Plots {.tabset}
+
+```{r density_plots_post_tree, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Density Plot per clone {.tabset}
+
+```{r no-density_plots_per_clone, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Sort Hyperdiploidy
+
+```{r eval = F}
+load("resampling_Pt4_dia_100k_cache/html/define_cnvs_928ea434646a7dd702af10ee9fca6238.RData")
+load("resampling_Pt4_dia_100k_cache/html/get_signal_matrix_2cca4b3fbbed0a2423539966bd2f7c60.RData")
+load("resampling_Pt4_dia_100k_cache/html/resampling_tree_596400286b0d3eea0feeb2cb60474c2a.RData")
+source("resampling_functions.R")
+source("plots.R")
+```
+
+```{r sort_hyperdiploidy}
+# All cells with chr3 amplification happen to be hyperdiploid
+cnv_table$chr[2] <- "chr1q"
+cnv_table$chr[4] <- "HyDp"
+cnv_table[c(2:8,11,19:21,23,25,27,29,30,32,35,36,38:40), c("start", "end")] <- 0
+
+# CN#2 (prev gain of 1q, now loss of 1q after HD cells)
+cells_with_loss_of_1q_post_HD <- which(resampled_segcopy_data[, 4] == 3 & resampled_segcopy_data[, 2] == 2)
+resampled_segcopy_data[, 2] <- 2
+resampled_segcopy_data[cells_with_loss_of_1q_post_HD, 2] <- 1
+cnv_table[2, "n"] <- 1
+
+# CN#11 (prev gain of chr8, now loss of chr8 after HD)
+cells_with_loss_of_chr8_post_HD <- which(resampled_segcopy_data[, 4] == 3 & resampled_segcopy_data[, 11] == 2)
+resampled_segcopy_data[, 11] <- 2
+resampled_segcopy_data[cells_with_loss_of_chr8_post_HD, 11] <- 1
+cnv_table[11, "n"] <- 1
+
+# # CN#19 (prev gain of chr10, now loss of chr10 after HD)
+# cells_with_loss_of_chr10_post_HD <- which(resampled_segcopy_data[, 4] == 3 & resampled_segcopy_data[, 19] == 3 & resampled_segcopy_data[, 20] == 2)
+# resampled_segcopy_data[, 19] <- 2
+# resampled_segcopy_data[cells_with_loss_of_chr10_post_HD, 19] <- 1
+# resampled_segcopy_data[cells_with_loss_of_chr10_post_HD, 20] <- 4
+# cnv_table[19, "n"] <- 1
+
+# CN#29 (prev gain of chr16, now loss of chr16 after HD)
+cells_with_loss_of_chr8_post_HD <- which(resampled_segcopy_data[, 4] == 3 & resampled_segcopy_data[, 29] == 2)
+resampled_segcopy_data[, 29] <- 2
+resampled_segcopy_data[cells_with_loss_of_chr8_post_HD, 29] <- 1
+cnv_table[29, "n"] <- 1
+
+# CN#38 (prev gain of chrX (3->4), now loss of chrX after HD (4->3))
+cells_with_loss_of_chrX_post_HD <- which(resampled_segcopy_data[, 4] == 3 & resampled_segcopy_data[, 38] == 3 & resampled_segcopy_data[, 39] == 2)
+resampled_segcopy_data[, 38] <- 2
+resampled_segcopy_data[cells_with_loss_of_chrX_post_HD, 38] <- 1
+resampled_segcopy_data[cells_with_loss_of_chrX_post_HD, 39] <- 4
+cnv_table[38, "n"] <- 1
+
+# CN#3 (prev gain of chr2 prior to HypDip, now independent)
+cells_with_gain_of_chr2_without_HD <- which(resampled_segcopy_data[, 4] == 2 & resampled_segcopy_data[, 3] == 3)
+resampled_segcopy_data[, 3] <- 2
+resampled_segcopy_data[cells_with_gain_of_chr2_without_HD, 3] <- 3
+
+# Remove all the events associated with CN#4 (Hyperdiploidy)
+hyperdiploidy_events <- c(5,6,7,19,23,25,27,30,32,35,36,39)
+cnv_table <- cnv_table[-hyperdiploidy_events, ]
+resampled_segcopy_data <- resampled_segcopy_data[, -hyperdiploidy_events]
+
+event_sizes <- cnv_table$end - cnv_table$start + 1
+tree.arcs <- get_tree_from_data_matrix(
+  resampled_segcopy_data, plot = T, event_sizes = event_sizes)
+```
+
+# COSMIC annotations {.tabset}
+
+```{r no-cosmic_annotations, results = "asis", cache = F}
+```
+
+```{r echo = F, cache = F}
+knitr::read_chunk("resampling_chunks.cosmic_annotations.R")
+```
+
+```{r cosmic_annotations_v90, results = "asis", cache = F}
+```
+
+# Annotated tree
+
+```{r no-annotated_tree, fig.height = 8, fig.width = 8}
+```
+
+```{r echo = F, cache = F}
+knitr::read_chunk("resampling_chunks.plot_final_trees.R")
+tree_title = "Pt4 diagnosis"
+```
+
+```{r plot_final_trees, fig.height = 8, fig.width = 8, cache = FALSE}
+```
+
+## Tree with event matrix
+
+```{r no-plot_final_trees_with_shared_events, fig.height = 11, fig.width = 11, cache = FALSE}
+source("plot_cna_tree.R")
+
+tree <- tree.arcs %>%
+  select(parent, child, label) %>%
+  rbind(tibble(parent = as.numeric(NA), child = 1, label = "")) %>%
+  transmute(node_id = child, parent_id = parent, events = label) %>%
+  arrange(node_id) %>%
+  mutate(size = attr(tree.arcs, "counts")[, 1, drop = T])
+
+datatable(cosmic_annotations, rownames = F)
+
+event_labels <- cosmic_annotations %>%
+  mutate(tree_label = case_when(
+    str_length(genes) > 1 & str_length(genes) < 40 ~ genes,
+    str_length(leukaemia_genes) > 1 & str_length(leukaemia_genes) < 40 ~
+      paste0(leukaemia_genes, "/..."),
+    str_length(leukaemia_genes) > 1 ~
+      paste0(sub("/[^/]*$", "", substr(leukaemia_genes, 1, 41)), "/..."),
+    str_length(genes) > 1 ~
+      paste0(sub("/[^/]*$", "", substr(genes, 1, 41)), "/..."),
+    TRUE ~ lesion
+  )) %>% pull(tree_label)
+event_labels <- paste(event_labels, ifelse(cnv_table$n < 2, "(loss)", "(gain)"), sep = " ")
+
+plot_cna_tree(tree, event_labels = event_labels,
+              x_left = 0, x_right = 41, y_top = 17, y_bottom = -29, title = tree_title)
+```
+
+## Small tree version
+
+```{r no-plot_final_trees_small, fig.height = 6, fig.width = 6, cache = FALSE}
+save.image("image.resampling_Pt4_dia_100k.RData")
+load("image.resampling_Pt4_dia_100k.RData")
+plot_cna_tree(tree, event_labels = event_labels, y_top = 19, title = tree_title, show_cna_matrix = F)
+```

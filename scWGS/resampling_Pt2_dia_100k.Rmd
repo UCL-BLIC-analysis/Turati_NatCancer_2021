@@ -1,0 +1,492 @@
+---
+title: "Pt2 diagnosis resampling analysis"
+author: "Javier Herrero"
+date: "`r date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r}
+knitr::read_chunk("resampling_chunks.R")
+```
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(cowplot)
+library(ggExtra)
+library(knitr)
+library(optrees)
+library(mclust)
+library(DT)
+
+knitr::opts_chunk$set(echo = TRUE)
+opts_chunk$set(cache=TRUE)
+opts_chunk$set(cache.lazy=FALSE)
+opts_chunk$set(autodep = TRUE)
+
+source("plots.R")
+source("cnv_analysis.lib.R")
+source("resampling_functions.R")
+```
+
+```{r set_seed}
+set.seed(123456)
+```
+
+# Input data {.tabset}
+
+```{r read_input, results = "asis"}
+single_seg_renorm <- readRDS("cnv_copynumber_Pt2_dia_100k.single_renorm.RDS")
+multi_seg_renorm <- readRDS("cnv_copynumber_Pt2_dia_100k.multi_seg_renorm.RDS")
+library(xlsx)
+meta_data <- read.xlsx(paste0("../data/Samples.xlsx"), sheetIndex = 1)
+cells <- meta_data %>% filter(Day == "Diagnosis" & Patient == "Pt2") %>% pull(Cell) %>% as.character()
+cells <- intersect(colnames(multi_seg_renorm[["05"]][, -c(1:3)]), cells)
+multi_seg_renorm[["05"]] <- multi_seg_renorm[["05"]][, c("CHR", "START", "END", cells)]
+single_seg_renorm[["10"]] <- single_seg_renorm[["10"]][, c("CHR", "START", "END", cells)]
+```
+
+There are `r length(cells)` cells in this dataset.
+
+```{r define_cnvs, results = "asis"}
+plotGenome(multi_seg_renorm[['05']])
+plotGenome(single_seg_renorm[['10']])
+plotFrequency(multi_seg_renorm[['05']])
+plotFrequency(single_seg_renorm[['10']])
+for (this_chr in paste0("chr", c(1:22, "X"))) {
+  if (!is.null(opts_knit$get("output.dir"))) {
+    cat(knit_child(text = paste0("\n## ", this_chr, "\n\n"), quiet = T))
+  }
+  plotChr(multi_seg_renorm[['05']], this_chr)
+  plotChr(single_seg_renorm[['10']], this_chr)
+}
+
+get_cnv_table <- function(data) {
+  cnv_table <- tibble()
+  all_cells <- colnames(data)[-c(1:3)]
+  chr_length_rle <- rle(data[, "CHR"])
+  chr_starts <- cumsum(chr_length_rle$lengths) - chr_length_rle$lengths + 1
+  names(chr_starts) <- chr_length_rle$values
+  for (this_cell in all_cells) {
+    for (this_chr in unique(data[, "CHR"])) {
+      this_data <- data[data$CHR == this_chr, this_cell]
+      rle <- rle(this_data)
+      this_cnv_table <- tibble(
+        from = cumsum(rle$lengths) - rle$lengths + chr_starts[this_chr],
+        to = cumsum(rle$lengths) + chr_starts[this_chr] - 1,
+        n = rle$values,
+        num.cells = 1,
+        cells = this_cell,
+        chr = data[cumsum(rle$lengths) - rle$lengths + chr_starts[this_chr], "CHR"],
+        start = data[cumsum(rle$lengths) - rle$lengths + chr_starts[this_chr], "START"],
+        end = data[cumsum(rle$lengths) +  chr_starts[this_chr] - 1, "END"],
+        n.bins = rle$lengths
+        )
+      cnv_table <- rbind(cnv_table, this_cnv_table %>% filter(n != 2))
+    }
+  }
+  cnv_table <- cnv_table %>%
+    group_by(from, to, n, chr, start, end, n.bins) %>%
+    summarise(num.cells = n(), cells = paste(cells, collapse = ","))
+  return(cnv_table)
+}
+
+row.names(multi_seg_renorm[['05']]) <- NULL
+cnv_table <- get_cnv_table(multi_seg_renorm[['05']])
+# cnv_table_orig <- cnv_table
+# cnv_table <- cnv_table_orig
+cnv_table <- cnv_table %>% filter(n.bins > 6)
+cnv_table <- cnv_table %>% filter(chr != "chrY")
+
+to_be_removed <- c(1,2,3,4,10,12,13,16,17,18,19,21,22,24,25,26,28,29,30,35,36,37,38,39)
+not_so_sure <- c()
+to_be_kept <- c(5,6,7,8,9,11,12,14,15,20,23,27,31,32,33,34)
+curated_cnv_table <- as.data.frame(cnv_table)[to_be_kept, ]
+
+curated_cnv_table["7", "start"] <- 64234606
+curated_cnv_table["7", "end"] <- 66386004
+curated_cnv_table["7", "n"] <- 3
+curated_cnv_table["14", "start"] <- 35109012
+curated_cnv_table["14", "end"] <- 37934244
+curated_cnv_table["14", "n"] <- 3
+curated_cnv_table["15", "end"] <- 38841621
+curated_cnv_table["31", "end"] <- 18959018
+curated_cnv_table["33", "end"] <- 23660545
+curated_cnv_table["34", "end"] <- 155049231
+
+
+
+
+
+cnv_table <- as.data.frame(curated_cnv_table)
+
+#### --- Attempt at using single_sample segmentation ----
+# library(GenomicRanges)
+# row.names(single_seg_renorm[['10']]) <- NULL
+# single.cnv_table <- get_cnv_table(single_seg_renorm[['10']])
+# single.cnv_table <- single.cnv_table %>% filter(n.bins > 6)
+# single.cnv_table <- single.cnv_table %>% filter(chr != "chrY")
+# 
+# single.cnv_table.gr <- GenomicRanges::GRanges(
+#   seqnames = single.cnv_table$chr,
+#   ranges = IRanges::IRanges(start = single.cnv_table$start,
+#                             end = single.cnv_table$end),
+#   n = single.cnv_table$n
+# )
+# single.cnv_table.grl <- split(single.cnv_table.gr, single.cnv_table.gr$n)
+# single.cnv_table.grl.ranges <- reduce(single.cnv_table.grl)
+# collated.single.cnv_table <- single.cnv_table[0, ]
+# for (this_n in names(single.cnv_table.grl)) {
+#   overlaps <- findOverlaps(single.cnv_table.grl.ranges[[this_n]],
+#                            single.cnv_table.grl[[this_n]])
+#   ranges <- as.data.frame(single.cnv_table.grl.ranges[[this_n]]) %>% as_tibble() %>%
+#     transmute(chr = seqnames, start = start, end = end, range_id = row_number())
+#   cnvs <- single.cnv_table %>% filter(n == this_n) %>% ungroup() %>% mutate(cnv_id = row_number())
+#   new_cnvs <-     ranges %>%
+#     left_join(overlaps %>% as_tibble(), by = c("range_id" = "queryHits")) %>%
+#     left_join(cnvs, by = c("subjectHits" = "cnv_id")) %>%
+#     group_by(range_id) %>% summarise(from = min(from), to = max(to), n = min(n),
+#       chr = dplyr::first(chr.x), start = min(start.y), end = max(end.y), n.bins = 0,
+#       num.cells = length(unique(unlist(strsplit(cells, ",")))),
+#       cells = paste(unique(unlist(strsplit(cells, ","))), collapse = ",")) %>%
+#     mutate(n.bins = to - from + 1) %>%
+#     select(-range_id)
+# 
+#   if (nrow(collated.single.cnv_table) > 0) {
+#     collated.single.cnv_table <- collated.single.cnv_table %>% rbind(new_cnvs)
+#   } else {
+#     collated.single.cnv_table <- new_cnvs
+#   }
+# }
+# 
+# all_cells <- colnames(single_seg_renorm[['10']])[-c(1:3)]
+# collated.single.cnv_table <- collated.single.cnv_table %>% filter(
+#     ((end - start) > 0000000 & num.cells > ceiling(length(all_cells) * 0.10)) |
+#     ((end - start) > 1000000 & num.cells > ceiling(length(all_cells) * 0.05)) |
+#     ((end - start) > 3000000 & num.cells > ceiling(length(all_cells) * 0.01)) |
+#     ((end - start) > 5000000 & num.cells > ceiling(length(all_cells) * 0.00))
+#   )
+# cnv_table <- collated.single.cnv_table
+#### --- Attempt at using single_sample segmentation ----
+
+# cnv_table <- cnv_table %>% filter(chr != "chr2")
+# cnv_table <- cnv_table %>% filter(chr != "chr3")
+# cnv_table <- cnv_table %>% filter(chr != "chr4")
+# # cnv_table <- cnv_table %>% filter(chr != "chr5")
+# cnv_table <- cnv_table %>% filter(chr != "chr6")
+# cnv_table <- cnv_table %>% filter(chr != "chr7")
+# # cnv_table <- cnv_table %>% filter(chr != "chr8")
+# # cnv_table <- cnv_table %>% filter(chr != "chr9")
+# cnv_table <- cnv_table %>% filter(chr != "chr10")
+# cnv_table <- cnv_table %>% filter(chr != "chr11")
+# cnv_table <- cnv_table %>% filter(chr != "chr12")
+# cnv_table <- cnv_table %>% filter(chr != "chr13")
+# cnv_table <- cnv_table %>% filter(chr != "chr14")
+# # cnv_table <- cnv_table %>% filter(chr != "chr15")
+# cnv_table <- cnv_table %>% filter(chr != "chr16")
+# cnv_table <- cnv_table %>% filter(chr != "chr17")
+# cnv_table <- cnv_table %>% filter(chr != "chr18")
+# # cnv_table <- cnv_table %>% filter(chr != "chr19")
+# cnv_table <- cnv_table %>% filter(chr != "chr20")
+# # cnv_table <- cnv_table %>% filter(chr != "chr21")
+# # cnv_table <- cnv_table %>% filter(chr != "chr22")
+# # cnv_table <- cnv_table %>% filter(chr != "chrX")
+# 
+# cnv_table <- cnv_table %>% filter(chr != "chr9" | end != 25222566)
+# cnv_table <- cnv_table %>% filter(chr != "chr9" | start != 20620222 | end != 22976748)
+# cnv_table <- cnv_table %>% filter(chr != "chr9" | start != 20620222 | end != 22774450 | n != 1)
+# cnv_table <- cnv_table %>% filter(chr != "chr9" | start != 25325169 | end != 38841621)
+# 
+# cnv_table <- cnv_table %>% filter(chr != "chr15" | start != 20226353)
+# cnv_table <- cnv_table %>% filter(chr != "chr15" | end < 23718060)
+# 
+# cnv_table <- cnv_table %>% filter(chr != "chr19" | start != 1)
+# 
+# cnv_table <- cnv_table %>% filter(chr != "chr21" | end != 21000898)
+# 
+# cnv_table <- cnv_table %>% filter(chr != "chrX" | (start == 2583625 & end == 155049231))
+```
+
+```{r get_signal_matrix}
+data_env <- new.env()
+load("data_Pt2_dia_100k.rda", envir = data_env)
+segrenorm_data <- data_env$segrenorm_data
+rm(data_env)
+segrenorm_data <- segrenorm_data[, c("CHR", "START", "END", cells)]
+
+# ## Adjust for ploidy:
+# # 1. read ploidy data (from Ginkgo)
+# ploidy <- read.table("../data/100k/ploidy.txt", header = T, row.names = 1)
+# # 2. Multiply signal (ca.1 centered) by ploidy
+# segrenorm_data[, -c(1:3)] <- sweep(segrenorm_data[, -c(1:3)], 2,
+#                                    ploidy[colnames(segrenorm_data)[-c(1:3)], ], "*")
+# # 2. Divide signal by 2 (to make it 1 centered again, after ploidy adjustment)
+# segrenorm_data[, -c(1:3)] <- sweep(segrenorm_data[, -c(1:3)], 2, 2, "/")
+
+old_signal_matrix <- matrix(0, nrow = ncol(segrenorm_data) - 3, ncol = nrow(cnv_table))
+colnames(old_signal_matrix) <- paste0("V", 1:ncol(old_signal_matrix))
+for (i in 1:nrow(cnv_table)) {
+  this_cnv <- cnv_table[i, , drop = T]
+
+  old_signal_matrix[, i] <- segrenorm_data %>%
+    filter(CHR == this_cnv$chr & START >= this_cnv$start & END <= this_cnv$end) %>%
+    select(-c(1:3)) %>%
+    colMeans() * 2
+}
+cns <- cnv_table$n
+```
+
+
+# Curated CN events before resampling {.tabset}
+
+```{r set_starting_thresholds, dependson = c("get_signal_matrix")}
+starting_thresholds <- list(
+  mean = ifelse(cns < 2, cns + 0.5, cns - 0.5),
+  sd = rep(0.05, length(cns)))
+starting_thresholds$mean[8] <- 1.5
+```
+
+```{r, cache = F}
+DT::datatable(cnv_table)
+```
+
+```{r no-initial_density_plots, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime, dependson=c("define_cnvs", "get_signal_matrix", "set_starting_thresholds")}
+```
+
+```{r cache=F}
+# knitr::knit_exit()
+```
+
+
+<!--
+# Scatter plot
+
+```{r no-pairwise_scatterplots, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime, dependson=c("define_cnvs", "get_signal_matrix", "set_starting_thresholds")}
+```
+-->
+
+```{r cache=F}
+# knitr::knit_exit()
+```
+
+
+# Reconstruct the tree
+
+## Naive tree
+
+```{r naive_tree, dependson=c("set_seed", "define_cnvs", "get_signal_matrix", "set_starting_thresholds"), cache.extra = file.info("resampling_functions.R")$mtime}
+source("resampling_functions.R")
+original_segcopy_data <- round(old_signal_matrix)
+events_table <- as_tibble(rbind(2, original_segcopy_data)) %>%
+  mutate_all(function(x) {ifelse(x == 2, 0, 1)})
+unique_clones <- events_table %>%
+  group_by_all() %>% summarise(num.cells = n())
+print(paste(0, NA, nrow(unique_clones), NA, sum(events_table)))
+naive_tree <- get_tree_from_data_matrix(original_segcopy_data, plot = T)
+apply(old_signal_matrix, 2, range)
+```
+
+## Resampling tree
+
+```{r resampling_tree, dependson=c("set_seed", "define_cnvs", "get_signal_matrix", "set_starting_thresholds"), cache.extra = file.info("resampling_functions.R")$mtime}
+best_sample_data <- resample_matrix(
+  old_signal_matrix, starting_thresholds = starting_thresholds,
+  cns, num_loops = 10, num_samples = 1000, num_best = 100,
+  plot_intermediate_trees = F, use_num_events = F)
+best_sample_thresholds <- attr(best_sample_data, "thresholds")
+resampled_segcopy_data <- round(apply(best_sample_data, 1:2, mean))
+event_sizes <- cnv_table$end - cnv_table$start + 1
+tree.arcs <- get_tree_from_data_matrix(
+  resampled_segcopy_data, plot = T, event_sizes = event_sizes)
+
+apply(best_sample_data, 1:2, mean) %>% as_tibble() %>% gather() %>%
+  mutate(key = sub("V","", key)) %>%
+  ggplot +
+  # geom_violin(aes(x = key, y = value), bw = 0.1, col = "grey") +
+  geom_dotplot(aes(x = key, y = value), binaxis = "y",
+               stackdir = "center", binwidth = 0.01) +
+  scale_x_discrete(limits = 1:ncol(resampled_segcopy_data))
+
+apply(best_sample_data, 1:2, mean) %>% as_tibble() %>% gather() %>%
+  mutate(key = sub("V","", key)) %>%
+  ggplot +
+  geom_violin(aes(x = key, y = value), bw = 0.1, col = "grey") +
+  geom_dotplot(aes(x = key, y = value), binaxis = "y",
+               stackdir = "center", binwidth = 0.01) +
+  scale_x_discrete(limits = 1:ncol(resampled_segcopy_data))
+
+colSums(!apply(best_sample_data, 1:2, function(x){all(x == x[1])}))
+```
+
+```{r, cache = F, eval = F}
+# saveRDS(best_sample_data, "best_sample_data.rds")
+# knitr::knit_exit()
+best_sample_data <- readRDS("best_sample_data.rds")
+resampled_segcopy_data <- round(apply(best_sample_data, 1:2, mean))
+tree.arcs <- get_tree_from_data_matrix(resampled_segcopy_data, plot = T)
+```
+
+<!--
+# QC
+
+```{r no-compare_original_segcopy_data_to_final_data_matrix, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+-->
+
+# CN events per clone {.tabset}
+
+```{r genome_plots_with_clones, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Density Plots {.tabset}
+
+```{r density_plots_post_tree, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Density Plot per clone {.tabset}
+
+```{r density_plots_per_clone, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Sort overlapping events
+
+```{r sort_overlapping_events}
+# Merge 5 and 6, keep CN or 5 and end of 6
+cnv_table[5, "end"] <- cnv_table[6, "end"]
+cnv_table <- cnv_table[-6, ]
+resampled_segcopy_data <- resampled_segcopy_data[, -6]
+# Merge 7 and 9 (now 6 and 8)
+cnv_table[6, "end"] <- cnv_table[8, "end"]
+cnv_table <- cnv_table[-8, ]
+resampled_segcopy_data <- resampled_segcopy_data[, -8]
+
+event_sizes <- cnv_table$end - cnv_table$start + 1
+tree.arcs <- get_tree_from_data_matrix(
+  resampled_segcopy_data, plot = T, event_sizes = event_sizes)
+```
+
+# Table with all events
+
+```{r}
+cnv_table %>%
+  mutate(length = end - start + 1) %>% 
+  select(chr, start, end, length, n, num.cells) %>%
+  DT::datatable(
+      extensions = 'Buttons', options = list(
+      dom = 'Bfrtip',
+      buttons = list(
+        'copy',
+        list(extend = 'csv', filename = "Pt2_dia_CNAs"),
+        list(extend = 'excel', filename = "Pt2_dia_CNAs"))
+    )
+  )
+```
+
+# COSMIC annotations {.tabset}
+
+```{r no-cosmic_annotations, results = "asis", cache = F}
+```
+
+```{r echo = F, cache = F}
+knitr::read_chunk("resampling_chunks.cosmic_annotations.R")
+```
+
+```{r cosmic_annotations_v90, results = "asis", cache = F}
+```
+
+# Annotated tree
+
+```{r no-annotated_tree, fig.height = 8, fig.width = 8}
+```
+
+```{r echo = F, cache = F}
+knitr::read_chunk("resampling_chunks.plot_final_trees.R")
+tree_title = "Pt2 diagnosis"
+```
+
+```{r plot_final_trees, fig.height = 8, fig.width = 8, cache = FALSE}
+```
+
+## Tree with event matrix
+
+```{r no-plot_final_trees_with_shared_events, fig.height = 11, fig.width = 11, cache = FALSE}
+source("plot_cna_tree.R")
+
+tree <- tree.arcs %>%
+  select(parent, child, label) %>%
+  rbind(tibble(parent = as.numeric(NA), child = 1, label = "")) %>%
+  transmute(node_id = child, parent_id = parent, events = label) %>%
+  arrange(node_id) %>%
+  mutate(size = attr(tree.arcs, "counts")[, 1, drop = T])
+
+datatable(cosmic_annotations, rownames = F)
+
+event_labels <- cosmic_annotations %>%
+  mutate(tree_label = case_when(
+    str_length(genes) > 1 & str_length(genes) < 40 ~ genes,
+    str_length(leukaemia_genes) > 1 & str_length(leukaemia_genes) < 40 ~
+      paste0(leukaemia_genes, "/..."),
+    str_length(leukaemia_genes) > 1 ~
+      paste0(sub("/[^/]*$", "", substr(leukaemia_genes, 1, 41)), "/..."),
+    str_length(genes) > 1 ~
+      paste0(sub("/[^/]*$", "", substr(genes, 1, 41)), "/..."),
+    TRUE ~ lesion
+  )) %>% pull(tree_label)
+event_labels <- paste(event_labels, ifelse(cnv_table$n < 2, "(loss)", "(gain)"), sep = " ")
+
+plot_cna_tree(tree, event_labels = event_labels,
+              x_left = 0, x_right = 41, y_top = 19, y_bottom = -27, title = tree_title)
+```
+
+## Small tree version
+
+```{r no-plot_final_trees_small, fig.height = 6, fig.width = 6, cache = FALSE}
+save.image("image.resampling_Pt2_dia_100k.RData")
+load("image.resampling_Pt2_dia_100k.RData")
+plot_cna_tree(tree, event_labels = event_labels, y_top = 19, title = tree_title, show_cna_matrix = F)
+```
+
+
+# Comparison to FISH data
+
+```{r eval = F}
+fish_clones_file <- "../data/fish/pt2.csv"
+
+fish_clones <- read.csv(fish_clones_file, header = T)
+
+kable(fish_clones)
+
+fish_genes <- data.frame(gene = c("P16", "Pax5", "TEL", "AML"),
+                         chr = c("chr9", "chr9", "chr12", "chr21"),
+                         start = c(21967751, 36833272, 11802788, 36160098),
+                         end = c(21995300, 37034103, 12048336, 37376965))
+kable(fish_genes)
+
+# New data frame to store the CN of the fish genes for each cell
+cells <- colnames(segrenorm_data)[-c(1:3)]
+cell_clones <- data.frame(matrix(NA, nrow = length(cells), ncol = nrow(fish_genes) + 1))
+colnames(cell_clones) <- c("cell", as.character(fish_genes$gene))
+rownames(cell_clones) <- cells
+cell_clones$cell <- cells
+
+for (cell in cells) {
+  for (gene in 1:nrow(fish_genes)) {
+    cn <- m.fit.cell.segcopy_data[
+      as.character(m.fit.cell.segcopy_data$CHR) == as.character(fish_genes[gene, "chr"]) &
+        m.fit.cell.segcopy_data$START <= fish_genes[gene, "end"] &
+        m.fit.cell.segcopy_data$END >= fish_genes[gene, "start"], cell]
+    if (length(unique(cn)) > 1) {
+      if (all(cn < 2)) {
+        cn <- min(cn)
+      } else {
+        cn <- max(cn)
+      }
+    }
+    cell_clones[cell, as.character(fish_genes[gene, "gene"])] <- cn[1]
+  }
+}
+
+```

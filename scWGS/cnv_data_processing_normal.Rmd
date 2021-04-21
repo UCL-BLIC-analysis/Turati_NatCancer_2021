@@ -1,0 +1,588 @@
+---
+author: "Javier Herrero/Chuling Ding"
+date: "`r date()`"
+output:
+  html_document:
+    code_folding: hide
+    keep_md: yes
+  word_document: default
+always_allow_html: yes
+params:
+  Patient: "Normal"
+  bin_size: "100k"
+  data_dir: "../data/"
+  min_lorenz: 0.35
+  max_gini: 0.35
+  max_mapd: 0.7
+  min_num_reads: 500000
+  min_median_reads: 10
+  data_file: ""
+title: "`r paste0('Copy number events in ', params$Patient, ' using ', params$bin_size, ' bin size (Data processing)')`"
+---
+
+```{r data_processing__libraries, message = FALSE}
+source("cnv_analysis.lib.R")
+source("../R/plots.R")
+library(knitr)
+library(stringr)
+library(DT)
+library(ineq)
+opts_chunk$set(cache=FALSE)
+
+save_data_file <- params$data_file
+```
+
+This document contains the analysis on the CNA events found by Ginkgo on a set of single cell WGS data.
+
+# Input data
+
+We use the files listed below, which have been GC-corrected by Ginkgo. This is the result of aligning the reads with bowtie2 to the hg19 (GRCh37) human assembly. Reads with a mapping quality >= 30 are used to count the number of reads in variable bins of 100kb of mappable genome. So-called bad bins are removed and the remaining are GC-corrected with a lowess fit. *SegNorm* files contain the GC corrected and normalised raw data while *SegCopy* files contain the copy number value estimated by Ginkgo.
+
+```{r data_processing_read_data, results="asis"}
+library(xlsx)
+
+data_dir <- paste0(params$data_dir, params$bin_size, "/")
+
+library_dirs = list.files(data_dir, pattern = "VT")
+
+rawdata_files = paste0(data_dir, library_dirs, "/data")
+segcopy_files = paste0(data_dir, library_dirs, "/SegCopy")
+segnorm_files = paste0(data_dir, library_dirs, "/SegNorm")
+segfixed_files = paste0(data_dir, library_dirs, "/SegFixed")
+segstats_files = paste0(data_dir, library_dirs, "/SegStats")
+meta_data <- read.xlsx(paste0(data_dir, "../Samples.xlsx"), sheetIndex = 1)
+rownames(meta_data) <- meta_data$Cell
+
+cat(paste("Raw data input files:",
+          paste(sapply(rawdata_files,
+                       function(name) {return(paste0("[", name, "](", name, ")"))}
+          ),
+          collapse = ", ")
+))
+
+cat(paste("SegCopy input files:",
+          paste(sapply(segcopy_files,
+                       function(name) {return(paste0("[", name, "](", name, ")"))}
+          ),
+          collapse = ", ")
+))
+
+cat(paste("SegNorm input files:",
+          paste(sapply(segnorm_files,
+                       function(name) {return(paste0("[", name, "](", name, ")"))}
+          ),
+          collapse = ", ")
+))
+
+cat(paste("SegFixed input files:",
+          paste(sapply(segfixed_files,
+                       function(name) {return(paste0("[", name, "](", name, ")"))}
+          ),
+          collapse = ", ")
+))
+
+## Read the data from the files
+rawdata_data <- read_ginkgo_rawdata_files(rawdata_files)
+segcopy_data <- read_ginkgo_signal_files(segcopy_files)
+segnorm_data <- read_ginkgo_signal_files(segnorm_files)
+segfixed_data <- read_ginkgo_signal_files(segfixed_files)
+segstats_data <- read_ginkgo_segstats_files(segstats_files)
+
+original_cell_filenames <- colnames(rawdata_data)
+colnames(rawdata_data) <- sub(".dedup.sorted", "", colnames(rawdata_data))
+colnames(segcopy_data) <- sub(".dedup.sorted", "", colnames(segcopy_data))
+colnames(segnorm_data) <- sub(".dedup.sorted", "", colnames(segnorm_data))
+colnames(segfixed_data) <- sub(".dedup.sorted", "", colnames(segfixed_data))
+rownames(segstats_data) <- sub(".dedup.sorted", "", rownames(segstats_data))
+names(original_cell_filenames) <- colnames(rawdata_data)
+
+if (params$bin_size == "100k") {
+  badbins_file = "~/Source/ginkgo/genomes/hg19/original/badbins_variable_100000_76_bwa"
+} else if (params$bin_size == "250k") {
+  badbins_file = "~/Source/ginkgo/genomes/hg19/original/badbins_variable_250000_76_bwa"
+} else if (params$bin_size == "500k") {
+  badbins_file = "~/Source/ginkgo/genomes/hg19/original/badbins_variable_500000_76_bwa"
+} else {
+  stop("Don't know which badbins file to use for bin_size ", params$bin_size)
+}
+badbins = read.table(badbins_file, header=FALSE, sep="\t", as.is=TRUE)
+rawdata_data <- data.frame(rawdata_data[-badbins[,1], ])
+rawdata_data <- cbind(segcopy_data[, 1:3], rawdata_data)
+
+## Limit the analysis to the relevan patient (requires 'Patient' to be set):
+rawdata_data <- subset_signal_data(rawdata_data, meta_data, Patient = params$Patient)
+segcopy_data <- subset_signal_data(segcopy_data, meta_data, Patient = params$Patient)
+segnorm_data <- subset_signal_data(segnorm_data, meta_data, Patient = params$Patient)
+segfixed_data <- subset_signal_data(segfixed_data, meta_data, Patient = params$Patient)
+segstats_data <- subset_segstats_data(segstats_data, meta_data, Patient = params$Patient)
+```
+
+Just to check that we are using the correct data, this histogram should show a nice distribution centered at a value a bit higher than the bin size (as we are using a variable bin size):
+
+```{r data_processing__bin_size_histogram, fig.height = 3}
+bin_sizes <- (segcopy_data[, "END"] - segcopy_data[, "START"]) / 1000
+hist(subset(bin_sizes, bin_sizes < quantile(bin_sizes, probs = 0.9)), breaks = 100,
+     main = "Histogram of bin sizes", col = "grey", xlab = "bin size (kb)")
+```
+
+# Filtering low-quality cells
+
+```{r data_processing__filter_cells, results = "asis", fig.height = 3}
+# =============================================================================
+# Gini filter
+# =============================================================================
+max_gini <- params$max_gini
+
+gini <- c()
+for (k in 4:ncol(rawdata_data)) {gini[k-3] = Gini(rawdata_data[,k])}
+segstats_data$gini <- gini
+hist(segstats_data$gini, col = "darkgrey", border = "white", breaks = 20,
+    main = "Gini index", xlab = "Gini index")
+abline(v = max_gini, col = "red", lwd = 3)
+
+high_gini_cells <- rownames(segstats_data[segstats_data$gini > max_gini, ])
+high_gini_cells <- intersect(colnames(segcopy_data), high_gini_cells)
+if (length(high_gini_cells) > 0) {
+ plotGenome(segcopy_data[, c("CHR", "START", "END", high_gini_cells)], showBins = T,
+             Treatment = meta_data[high_gini_cells, "Treatment"],
+             Mouse = meta_data[high_gini_cells, "Mouse"],
+             Day = meta_data[high_gini_cells, "Day"],
+             Library = meta_data[high_gini_cells, "Library"])
+ title(paste0("Cells with high Gini-index (Gini > ", max_gini, ")"))
+ lines(par("usr")[1:2], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+ lines(par("usr")[2:1], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+}
+# =============================================================================
+
+
+# =============================================================================
+# MAPD filter (from the G&T paper)
+# =============================================================================
+max_mapd <- params$max_mapd
+ginkgo_logR <- log(segnorm_data[, -c(1:3)], base = 2)
+mapd <- apply((abs(ginkgo_logR[2:nrow(ginkgo_logR), ] - ginkgo_logR[-nrow(ginkgo_logR), ])), 2, mean)
+rm(ginkgo_logR)
+hist(mapd, col = "darkgrey", border = "white", breaks = 20,
+     main = "MAPD filter", xlab = "MAPD",
+     xlim = c(0, max(max_mapd, max(mapd)) + 0.1))
+segstats_data$mapd[names(mapd)] <- mapd
+abline(v = max_mapd, col = "red", lwd = 3)
+high_mapd_cells <- names(which(mapd > max_mapd))
+high_mapd_cells <- intersect(colnames(segcopy_data), high_mapd_cells)
+cur_par <- par(no.readonly = TRUE)
+if (length(high_mapd_cells) > 0) {
+  plotGenome(segcopy_data[, c("CHR", "START", "END", high_mapd_cells)], showBins = T,
+             Treatment = meta_data[high_mapd_cells, "Treatment"],
+             Mouse = meta_data[high_mapd_cells, "Mouse"],
+             Day = meta_data[high_mapd_cells, "Day"],
+             Library = meta_data[high_mapd_cells, "Library"])
+  title(paste0("Cells with a high MAPD (mapd > ", max_mapd, ")"))
+  lines(par("usr")[1:2], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  lines(par("usr")[2:1], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  par(cur_par)
+}
+# =============================================================================
+
+
+# =============================================================================
+# Filter cells with too few reads
+# =============================================================================
+min_num_reads <- params$min_num_reads
+hist(log(segstats_data$Reads, base = 10), col = "darkgrey", border = "white", breaks = 20,
+     main = "Low #reads filter", xlab = "#reads", axes = F,
+     xlim = c(log(min(min_num_reads, min(segstats_data$Reads)), base = 10) - 0.1, log(max(segstats_data$Reads), base = 10) + 0.1))
+ticks <- seq(from = par("xaxp")[1], to = par("xaxp")[2], length.out = par("xaxp")[3] + 1)
+axis(1, at = ticks, labels = round(10 ^ ticks))
+axis(2)
+abline(v = log(min_num_reads, base = 10), col = "red", lwd = 3)
+low_reads_cells <- rownames(segstats_data[segstats_data$Reads < min_num_reads, ])
+low_reads_cells <- intersect(colnames(segcopy_data), low_reads_cells)
+if (length(low_reads_cells) > 0) {
+  plotGenome(segcopy_data[, c("CHR", "START", "END", low_reads_cells)], showBins = T,
+             Treatment = meta_data[low_reads_cells, "Treatment"],
+             Mouse = meta_data[low_reads_cells, "Mouse"],
+             Day = meta_data[low_reads_cells, "Day"],
+             Library = meta_data[low_reads_cells, "Library"])
+  title(paste0("Cells with too few reads (n < ", min_num_reads, ")"))
+  lines(par("usr")[1:2], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  lines(par("usr")[2:1], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  par(cur_par)
+}
+# =============================================================================
+
+
+# =============================================================================
+# Filter cells with a low median number of reads per cell (should have been caught by the other filters)
+# =============================================================================
+min_median_reads <- params$min_median_reads
+hist(log(segstats_data$Median + 1, base = 10), col = "darkgrey", border = "white", breaks = 20,
+     main = "Low median filter", xlab = "Median", axes = F,
+     xlim = c(log(min(min_median_reads, min(segstats_data$Median) + 1), base = 10) - 0.1, log(max(segstats_data$Median), base = 10) + 0.1))
+ticks <- seq(from = par("xaxp")[1], to = par("xaxp")[2], length.out = par("xaxp")[3] + 1)
+axis(1, at = ticks, labels = 10 ^ ticks - 1)
+axis(2)
+abline(v = log(min_median_reads + 1, base = 10), col = "red", lwd = 3)
+low_median_cells <- rownames(segstats_data[segstats_data$Median < min_median_reads, ])
+low_median_cells <- intersect(colnames(segcopy_data), low_median_cells)
+if (length(low_median_cells) > 0) {
+  plotGenome(segcopy_data[, c("CHR", "START", "END", low_median_cells)], showBins = T,
+             Treatment = meta_data[low_median_cells, "Treatment"],
+             Mouse = meta_data[low_median_cells, "Mouse"],
+             Day = meta_data[low_median_cells, "Day"],
+             Library = meta_data[low_median_cells, "Library"])
+  title(paste0("Cells with a low median number of reads (median < ", min_median_reads, ")"))
+  lines(par("usr")[1:2], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  lines(par("usr")[2:1], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  par(cur_par)
+}
+# =============================================================================
+
+
+# =============================================================================
+# Filter cells by visual inspection of the QC plots
+# =============================================================================
+manually_filtered_cells <- c("VT15b_D702_D506", "VT15b_D703_D506", "VT15b_D703_D507", "VT15b_D709_D504",
+                             
+                             "VT19_D702_D508", "VT19_D704_D506", "VT19_D704_D507", "VT19_D709_D505",
+                             "VT19_D709_D508",
+                             
+                             "VT20_D701_D507", "VT20_D702_D503", "VT20_D702_D507", "VT20_D702_D508",
+                             "VT20_D704_D507", "VT20_D705_D504", "VT20_D706_D505",
+                             "VT20_D706_D506", "VT20_D707_D503", "VT20_D708_D503", "VT20_D709_D502",
+                             "VT20_D709_D506", "VT20_D710_D505", "VT20_D710_D506", "VT20_D710_D508",
+                             "VT20_D711_D504",
+                             
+                             "VT21_D701_D503", "VT21_D702_D504", "VT21_D706_D502", "VT21_D708_D501",
+                             "VT21_D709_D503",
+                             
+                             "VT22_D708_D503",
+                             
+                             ## These two cells have a very poor profile of CN, but this is mainly because
+                             ## Ginkgo misestimate the ploidy. A test assuming ploidy = 2 returns better results.
+                             # "VT24_D704_D504", # "VT24_D706_D504",
+                             "VT24_D711_D506",
+
+                             "VT27_D701_D507", "VT27_D708_D507",
+                             
+                             "VT31_D701_D502", "VT31_D702_D503", "VT31_D702_D505", "VT31_D704_D502",
+                             "VT31_D705_D502", "VT31_D705_D503", "VT31_D705_D504", "VT31_D705_D505",
+                             "VT31_D707_D502", "VT31_D707_D504", "VT31_D708_D502", "VT31_D708_D505",
+                             "VT31_D709_D502", "VT31_D709_D503", "VT31_D709_D505", "VT31_D710_D502",
+                             "VT31_D710_D504", "VT31_D710_D505", "VT31_D711_D502", "VT31_D711_D505",
+                             "VT31_D712_D502", "VT31_D712_D503", "VT31_D712_D505",
+                             
+                             "VT34_D702_D506", "VT34_D706_D506", "D34_D708_D504", "D34_D709_D502",
+                             "VT34_D710_D507",
+                             
+                             "VT35_D701_D508", "VT35_D702_D502", "VT35_D702_D504", "VT35_D703_D502",
+                             "VT35_D704_D503", "VT35_D704_D504", "VT35_D704_D506", "VT35_D704_D507",
+                             "VT35_D705_D507", "VT35_D707_D508", "VT35_D708_D502", "VT35_D710_D506",
+                             
+                             "VT38_N701_S510", "VT38_N702_S511", "VT38_N704_S505", "VT38_N704_S507",
+                             "VT38_N705_S505", "VT38_N705_S511", "VT38_N706_S506", "VT38_N706_S508",
+                             "VT38_N711_S503", "VT38_N712_S510", "VT38_N714_S502", "VT38_N714_S505",
+                             "VT38_N714_S511", "VT38_N715_S508", "VT38_N715_S510", "VT38_N715_S511", 
+                             
+                             "VT44_N702_S511"
+              
+                             )
+manually_filtered_cells <- intersect(colnames(segcopy_data), manually_filtered_cells)
+if (length(manually_filtered_cells) > 0) {
+  plotGenome(segcopy_data[, c("CHR", "START", "END", manually_filtered_cells)], showBins = T,
+             Treatment = meta_data[manually_filtered_cells, "Treatment"],
+             Mouse = meta_data[manually_filtered_cells, "Mouse"],
+             Day = meta_data[manually_filtered_cells, "Day"],
+             Library = meta_data[manually_filtered_cells, "Library"])
+  title("Manually filtered cells")
+  lines(par("usr")[1:2], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  lines(par("usr")[2:1], par("usr")[3:4], col = rgb(1, 0, 1, 0.3), lwd = 10)
+  par(cur_par)
+}
+# =============================================================================
+```
+
+```{r data_processing__filter_cells_venn, message = FALSE}
+# =============================================================================
+# Plot how the filter compare on a Venn diagram
+# =============================================================================
+library(gplots)
+venn(list(Gini.index = high_gini_cells,
+          MAPD = high_mapd_cells,
+          Num.reads = low_reads_cells,
+          Low.median = low_median_cells,
+          Manual = manually_filtered_cells))
+title("Overlap between the different filters")
+# =============================================================================
+```
+
+## Gini index filtered cells {.tabset}
+
+Here is the list of cells that have been filtered because of their Lorenz profile only, i.e. the ones that are acceptable according to the remaining criteria.
+
+```{r data_processing__check_lorenz_filtered_cells, message = FALSE, results="asis", fig.width = 2}
+# =============================================================================
+# Check manually filtered cells
+# =============================================================================
+gini_only <- meta_data[setdiff(high_gini_cells,
+                                 Reduce(union,
+                                        c(high_mapd_cells, low_reads_cells,
+                                          low_median_cells, manually_filtered_cells))), ]
+gini_only_lib <- gini_only[, 1]
+gini_only_cell_name <- as.character(gini_only[, 4])
+table <- data.frame("cell" = gini_only_cell_name,
+                    "Num.Reads" = segstats_data[gini_only_cell_name, "Reads"],
+                    "median.num.Reads" = segstats_data[gini_only_cell_name, "Median"],
+                    "MAPD" = mapd[gini_only_cell_name],
+                    "Gini" = segstats_data[gini_only_cell_name, "gini"],
+                    "Manual" = (gini_only_cell_name %in% manually_filtered_cells))
+DT::datatable(table)
+
+if (nrow(gini_only) > 0) {
+  for (cell_num in 1:length(gini_only_cell_name)) {
+    cell_filename <- original_cell_filenames[gini_only_cell_name[cell_num]]
+    cat(paste0('<div id="cell-', cell_filename, '" class="section level3">
+  <h3>', gini_only_cell_name[cell_num], '</h3>'))
+    # cat(paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_",
+    #            c("CN", "counts", "GC", "hist", "gini", "SoS"),
+    #            ".jpeg",")"))
+    cat(paste0("![](", data_dir, gini_only_lib[cell_num], "/", cell_filename, "_CN.jpeg)"))
+    figures <- c(paste0("![](", data_dir, gini_only_lib[cell_num], "/", cell_filename, "_counts.jpeg)"),
+               paste0("![](", data_dir, gini_only_lib[cell_num], "/", cell_filename, "_GC.jpeg)"),
+               paste0("![](", data_dir, gini_only_lib[cell_num], "/", cell_filename, "_hist.jpeg)"),
+               paste0("![](", data_dir, gini_only_lib[cell_num], "/", cell_filename, "_lorenz.jpeg)"),
+               paste0("![](", data_dir, gini_only_lib[cell_num], "/", cell_filename, "_SoS.jpeg)"),
+               ""
+               )
+    ## Note: print(kable(...)) might not work as expected when just running the chunk that calls this Rmd.
+    ## Best to write markdown code for the table manually.
+    # print(kable(matrix(figures, ncol = 3)))
+    l <- max(str_length(figures))
+    cat("\n\n")
+    cat(rep(strrep("-", l + 1), 3))
+    cat("\n")
+    figures <- str_pad(figures, l + 1, side = "right")
+    cat(paste(figures[1:3]))
+    cat("\n")
+    cat(paste(figures[4:6]))
+    cat("\n")
+    cat(rep(strrep("-", l + 1), 3))
+    cat("\n\n")
+    cat('</div>', fill = T)
+  }
+}
+# =============================================================================
+```
+
+## Manually filtered cells {.tabset}
+
+Here is the list of cells that have been manually filtered only, i.e. the ones that are acceptable according to the remaining criteria. The manual inspection of cells is based on the QC plots provided by Ginkgo and typically show a skewed coverage, a poor Lorenz curve, etc.
+
+```{r data_processing__check_manually_filtered_cells, message = FALSE, results="asis", fig.width = 2}
+# =============================================================================
+# Check manually filtered cells
+# =============================================================================
+manual_only <- meta_data[setdiff(manually_filtered_cells,
+                                 Reduce(union,
+                                        c(high_gini_cells, high_mapd_cells,
+                                          low_reads_cells, low_median_cells))), ]
+manual_only_lib <- manual_only[, 1]
+manual_only_cell_name <- as.character(manual_only[, 4])
+table <- data.frame("cell" = manual_only_cell_name,
+                    "Num.Reads" = segstats_data[manual_only_cell_name, "Reads"],
+                    "median.num.Reads" = segstats_data[manual_only_cell_name, "Median"],
+                    "MAPD" = mapd[manual_only_cell_name],
+                    "Gini" = segstats_data[manual_only_cell_name, "gini"],
+                    "Manual" = (manual_only_cell_name %in% manually_filtered_cells))
+DT::datatable(table)
+
+if (nrow(manual_only) > 0) {
+  for (cell_num in 1:length(manual_only_cell_name)) {
+    cell_filename <- original_cell_filenames[manual_only_cell_name[cell_num]]
+    cat(paste0('<div id="cell-', cell_filename, '" class="section level3">
+  <h3>', manual_only_cell_name[cell_num], '</h3>'))
+    # cat(paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_",
+    #            c("CN", "counts", "GC", "hist", "gini", "SoS"),
+    #            ".jpeg",")"))
+    cat(paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_CN.jpeg)"))
+    figures <- c(paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_counts.jpeg)"),
+               paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_GC.jpeg)"),
+               paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_hist.jpeg)"),
+               paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_lorenz.jpeg)"),
+               paste0("![](", data_dir, manual_only_lib[cell_num], "/", cell_filename, "_SoS.jpeg)"),
+               ""
+               )
+    ## Note: print(kable(...)) might not work as expected when just running the chunk that calls this Rmd.
+    ## Best to write markdown code for the table manually.
+    # print(kable(matrix(figures, ncol = 3)))
+    l <- max(str_length(figures))
+    cat("\n\n")
+    cat(rep(strrep("-", l + 1), 3))
+    cat("\n")
+    figures <- str_pad(figures, l + 1, side = "right")
+    cat(paste(figures[1:3]))
+    cat("\n")
+    cat(paste(figures[4:6]))
+    cat("\n")
+    cat(rep(strrep("-", l + 1), 3))
+    cat("\n\n")
+    cat('</div>', fill = T)
+  }
+}
+# =============================================================================
+```
+
+# Final list of cells
+
+```{r data_processing__remove_bad_cells, results = "asis"}
+# =============================================================================
+# Remove bad cells from futher analysis
+# =============================================================================
+bad_cells <- unique(c(high_mapd_cells, low_reads_cells, low_median_cells, manually_filtered_cells))
+
+
+# bad_cells <- Reduce(union, c(which(colnames(segnorm_data) %in% high_mapd_cells),
+#                              which(colnames(segnorm_data) %in% low_reads_cells),
+#                              which(colnames(segnorm_data) %in% low_median_cells)))
+
+if (length(bad_cells) > 0) {
+  segcopy_data <- segcopy_data[, -c(which(colnames(segcopy_data) %in% bad_cells))]
+  segnorm_data <- segnorm_data[, -c(which(colnames(segnorm_data) %in% bad_cells))]
+  segfixed_data <- segfixed_data[, -c(which(colnames(segfixed_data) %in% bad_cells))]
+  segstats_data <- segstats_data[-c(which(rownames(segstats_data) %in% bad_cells)), ]
+}
+
+## Filtering out the hyperdiploid cells
+## ploidy <- read.table("../data/ploidy.txt", header = T, sep = "\t")
+## ploidy <- ploidy[ploidy$Sample %in% colnames(segcopy_data),]
+## ploidy_normal <- ploidy[which(round(ploidy$Copy_Number) == 2),]
+## segcopy_data <- cbind(segcopy_data[,c(1:3)], segcopy_data[, c(which(colnames(segcopy_data) %in% row.names(ploidy_normal)))])
+## segnorm_data <- cbind(segnorm_data[,c(1:3)], segnorm_data[, c(which(colnames(segnorm_data) %in% row.names(ploidy_normal)))])
+## segfixed_data <- cbind(segfixed_data[,c(1:3)], segfixed_data[, c(which(colnames(segfixed_data) %in% row.names(ploidy_normal)))])
+## segstats_data <- segstats_data[c(which(rownames(segstats_data) %in% row.names(ploidy_normal))), ]
+# =============================================================================
+```
+
+# Re-normalisation using cord blood samples
+
+The re-normalisation should be after the filters, otherwise the stats would be affected by the bad cells dramatically. 
+
+```{r data_processing_re-normalisation, fig.height = 3}
+segcopy_filter <- segcopy_data[,1:3]
+segcopy_filter$filter <- 2
+
+bad_bins <- which(apply(segcopy_data[, -c(1:3)],  1, function(x) {sum(x >= 3) > 0.8*length(x)}))
+segcopy_filter[bad_bins,"filter"] <- 4
+
+bad_bins <- which(apply(segcopy_data[, -c(1:3)],  1, function(x) {sum(x <= 1) > 0.8 *length(x)}))
+segcopy_filter[bad_bins,"filter"] <- 0
+
+segnorm_stats <- segnorm_data[,1:3]
+## segnorm_stats_filtered <- segnorm_stats[segcopy_filter$filter == 2, ]
+
+segnorm_stats$average <- apply(segnorm_data[,-c(1:3)],  1, mean)
+segnorm_stats$sd <- apply(segnorm_data[, -c(1:3)],  1, sd)
+
+segcopy_filter[segnorm_stats$sd > 0.35,"filter"] <- 3
+segcopy_filter[segnorm_stats$average < 0.3,"filter"] <- 1
+
+saveRDS(segcopy_filter, "segcopy_filter.RDS")
+saveRDS(segnorm_stats, "segnorm_stats.RDS")
+
+###################################################
+######### Fix chrX for female patients ############
+###################################################
+
+# The S-index for those cells from CB_3 (female normal cells) is S508. 
+X <- cbind(segnorm_data[segnorm_data$CHR == "chrX",c(1:3)], segnorm_data[segnorm_data$CHR == "chrX",grep(pattern = "S508", colnames(segnorm_data))])
+segnorm_stats_female <- segnorm_stats
+segnorm_stats_female[segnorm_stats_female$CHR == "chrX", "average"] <- apply(X[,-c(1:3)], 1, mean)
+segnorm_stats_female[segnorm_stats_female$CHR == "chrX", "sd"] <- apply(X[,-c(1:3)], 1, sd)
+
+segnorm_stats_female <- segnorm_stats_female[segcopy_filter$filter == 2,]
+segrenorm_data <- segnorm_data[segcopy_filter$filter == 2, ]
+
+saveRDS(segnorm_stats_female, "segnorm_stats_female.RDS")
+
+segcopy_filter <- readRDS("segcopy_filter.RDS")
+segnorm_stats <- readRDS("segnorm_stats.RDS")
+segrenorm_data <- segnorm_data
+
+segrenorm_data <- cbind(segrenorm_data[,c(1:3)], apply(segrenorm_data[, -c(1:3)], 2, function(x) { x / segnorm_stats_female$average}))
+
+segrenorm_data <- cbind(segrenorm_data[,c(1:3)], apply(segrenorm_data[, -c(1:3)], 2, function(x) { x / median(x)}))
+
+plotGenome(segcopy_filter)
+title (main = "Overview of the bad bins")
+```
+
+```{r data_processing__cells_per_library, results = "asis"}
+cat("Some info about the data:")
+
+cells.df <- get_table_of_cells_per_library(segcopy_data, meta_data)
+kable(cells.df, row.names = F)
+rm(cells.df)
+```
+
+```{r data_processing__genome_cna_plot_config}
+all.cells <- colnames(segcopy_data)[-c(1:3)]
+cells <- all.cells
+fig.height <- 0.8 + length(cells) * 0.07
+```
+
+```{r data_processing__genome_cna_plot, fig.height=fig.height}
+# cell_order <- order(apply(segcopy_data[, -c(1:3)], 2, function(x) {sum(x != 2)})) + 3
+# plotGenome(segcopy_data[, c(1:3, cell_order)], showBins = T)
+# title(main = "All cells")
+plotGenome(segcopy_data, showBins = T,
+           Treatment = meta_data[cells, "Treatment"],
+           Sample = meta_data[cells, "Mouse"],
+           Day = meta_data[cells, "Day"],
+           Library = meta_data[cells, "Library"])
+
+plotNormGenome(segnorm_data, showBins = T,
+               # Treatment = meta_data[cells, "Treatment"],
+               # Sample = meta_data[cells, "Mouse"],
+               Day = meta_data[cells, "Day"])
+               # Library = meta_data[cells, "Library"])
+title(main = "All cells")
+
+
+### Multiple lorenz curve 
+mlc_data <- rawdata_data[,-c(1:3)][,which(colnames(rawdata_data[,-c(1:3)]) %in% cells)]
+plot(Lc(mlc_data[,1]), col = "red", ylab = "Cumulative Fraction of Total reads", xlab = "Cumulative Fraction of Genome", lwd = 0.15)
+for (i in 2:ncol(mlc_data)) {
+  lines(Lc(mlc_data[,i]), col = "red", lwd = 0.15)
+}
+
+print(cells)
+# for (i in colnames(mlc_data)[-1]) {
+#     ggplot(as.data.frame(mlc_data), aes(VT44_N702_S508)) +
+#     stat_lorenz_generalized() + geom_line(aes(y = VT44_N703_S511))
+# }
+# plot(p)
+```
+
+# Sequencing coverage
+
+```{r data_processing__coverage_histogram, fig.height = 5}
+hist(segstats_data$Reads * 76 / 3100000000, col = "darkgrey", border = "white", breaks = 40,
+     main = "Coverage (assuming all reads = 76bp)", xlab = NA)
+title(xlab = paste0("coverage (", par("xaxp")[1], "x - ", par("xaxp")[2], "x)"))
+```
+
+```{r save_data, results = "asis", echo = F}
+rm(list = names(which(sapply(ls(), function(n) {is.function(get(n))}))))
+rm("bin_sizes", "original_cell_filenames", "manual_only", "gini_only")
+if (nchar(save_data_file) > 0) {
+  cat(paste("Saving data into", save_data_file, "file.\n"))
+  save.image(file = save_data_file)
+}
+```
+
+----
+
+```{r data_processing__footer, echo=FALSE, comment=NA}
+sessionInfo()
+```
+
+Document generated on `r date()`

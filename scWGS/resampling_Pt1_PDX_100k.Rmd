@@ -1,0 +1,1726 @@
+---
+title: "Pt1 PDXs resampling analysis"
+author: "Javier Herrero"
+date: "`r date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r}
+knitr::read_chunk("resampling_chunks.R")
+```
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(cowplot)
+library(ggExtra)
+library(knitr)
+library(optrees)
+library(mclust)
+library(DT)
+
+knitr::opts_chunk$set(echo = TRUE)
+opts_chunk$set(cache=TRUE)
+opts_chunk$set(cache.lazy=FALSE)
+opts_chunk$set(autodep = TRUE)
+
+source("plots.R")
+source("cnv_analysis.lib.R")
+source("resampling_functions.R")
+```
+
+```{r set_seed}
+set.seed(123456)
+```
+
+# Input data {.tabset}
+
+```{r read_input, results = "asis"}
+data_env <- new.env()
+load("data_Pt1_PDX_100k.rda", envir = data_env)
+segrenorm_data <- data_env$segrenorm_data
+meta_data <- data_env$meta_data
+rm(data_env)
+single_seg_renorm <- readRDS("cnv_copynumber_Pt1_PDX_100k.single_seg_renorm.RDS")
+multi_seg_renorm <- readRDS("cnv_copynumber_Pt1_PDX_100k.multi_seg_renorm.RDS")
+cells <- meta_data %>% pull(Cell) %>% as.character()
+cells <- intersect(colnames(multi_seg_renorm[["05"]][, -c(1:3)]), cells)
+multi_seg_renorm[["05"]] <- multi_seg_renorm[["05"]][, c("CHR", "START", "END", cells)]
+single_seg_renorm[["10"]] <- single_seg_renorm[["10"]][, c("CHR", "START", "END", cells)]
+```
+
+There are `r length(cells)` cells in this dataset.
+
+```{r define_cnvs, results = "asis"}
+day.colors = c(Diagnosis = "pink", Relapse = "darkred",
+               d0 = "lightblue", d28 = "darkblue")
+
+treatment.colors = c(Ctrl = "lightgrey", Chemo = "purple")
+
+all_cells <- colnames(multi_seg_renorm[["05"]])[-c(1:3)]
+plotGenome(multi_seg_renorm[['05']],
+               Mouse = meta_data[all_cells, "Mouse"],
+               Treatment = treatment.colors[as.character(meta_data[all_cells, "Day"])],
+               Day = day.colors[as.character(meta_data[all_cells, "Day"])])
+plotGenome(single_seg_renorm[['10']],
+               Mouse = meta_data[all_cells, "Mouse"],
+               Treatment = treatment.colors[as.character(meta_data[all_cells, "Day"])],
+               Day = day.colors[as.character(meta_data[all_cells, "Day"])])
+plotFrequency(multi_seg_renorm[['05']])
+plotFrequency(single_seg_renorm[['10']])
+for (this_chr in paste0("chr", c(1:22, "X"))) {
+  if (!is.null(opts_knit$get("output.dir"))) {
+    cat(knit_child(text = paste0("\n## ", this_chr, "\n\n"), quiet = T))
+  }
+  plotChr(multi_seg_renorm[['05']], this_chr,
+               Mouse = meta_data[all_cells, "Mouse"],
+               Treatment = treatment.colors[as.character(meta_data[all_cells, "Day"])],
+               Day = day.colors[as.character(meta_data[all_cells, "Day"])])
+  plotChr(single_seg_renorm[['10']], this_chr,
+               Mouse = meta_data[all_cells, "Mouse"],
+               Treatment = treatment.colors[as.character(meta_data[all_cells, "Day"])],
+               Day = day.colors[as.character(meta_data[all_cells, "Day"])])
+}
+
+get_cnv_table <- function(data) {
+  cnv_table <- tibble()
+  all_cells <- colnames(data)[-c(1:3)]
+  chr_length_rle <- rle(data[, "CHR"])
+  chr_starts <- cumsum(chr_length_rle$lengths) - chr_length_rle$lengths + 1
+  names(chr_starts) <- chr_length_rle$values
+  for (this_cell in all_cells) {
+    for (this_chr in unique(data[, "CHR"])) {
+      this_data <- data[data$CHR == this_chr, this_cell]
+      rle <- rle(this_data)
+      this_cnv_table <- tibble(
+        from = cumsum(rle$lengths) - rle$lengths + chr_starts[this_chr],
+        to = cumsum(rle$lengths) + chr_starts[this_chr] - 1,
+        n = rle$values,
+        num.cells = 1,
+        cells = this_cell,
+        chr = data[cumsum(rle$lengths) - rle$lengths + chr_starts[this_chr], "CHR"],
+        start = data[cumsum(rle$lengths) - rle$lengths + chr_starts[this_chr], "START"],
+        end = data[cumsum(rle$lengths) +  chr_starts[this_chr] - 1, "END"],
+        n.bins = rle$lengths
+        )
+      cnv_table <- rbind(cnv_table, this_cnv_table %>% filter(n != 2))
+    }
+  }
+  cnv_table <- cnv_table %>%
+    group_by(from, to, n, chr, start, end, n.bins) %>%
+    summarise(num.cells = n(), cells = paste(cells, collapse = ","))
+  return(cnv_table)
+}
+
+curated_cnv_table <- read_csv("curated_cnv_table.Pt1_PDX.csv")
+
+cnv_table <- as.tibble(curated_cnv_table) %>% filter(keep == TRUE)
+```
+```{r cache=F}
+# knitr::knit_exit()
+```
+
+
+```{r get_signal_matrix}
+# ## Adjust for ploidy:
+# # 1. read ploidy data (from Ginkgo)
+# ploidy <- read.table("../data/100k/ploidy.txt", header = T, row.names = 1)
+# # 2. Multiply signal (ca.1 centered) by ploidy
+# segrenorm_data[, -c(1:3)] <- sweep(segrenorm_data[, -c(1:3)], 2,
+#                                    ploidy[colnames(segrenorm_data)[-c(1:3)], ], "*")
+# # 2. Divide signal by 2 (to make it 1 centered again, after ploidy adjustment)
+# segrenorm_data[, -c(1:3)] <- sweep(segrenorm_data[, -c(1:3)], 2, 2, "/")
+
+old_signal_matrix <- matrix(0, nrow = ncol(segrenorm_data) - 3, ncol = nrow(cnv_table))
+colnames(old_signal_matrix) <- paste0("V", 1:ncol(old_signal_matrix))
+for (i in 1:nrow(cnv_table)) {
+  this_cnv <- cnv_table[i, , drop = T]
+
+  old_signal_matrix[, i] <- segrenorm_data %>%
+    filter(CHR == this_cnv$chr & START >= this_cnv$start & END <= this_cnv$end) %>%
+    select(-c(1:3)) %>%
+    colMeans() * 2
+}
+cns <- cnv_table$n
+```
+
+
+# Curated CN events before resampling {.tabset}
+
+```{r set_starting_thresholds, dependson = c("get_signal_matrix")}
+starting_thresholds <- list(
+  mean = cnv_table$threshold,
+  sd = cnv_table$sd)
+```
+
+```{r, cache = F}
+DT::datatable(cnv_table)
+```
+
+```{r no-initial_density_plots, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime, dependson=c("define_cnvs", "get_signal_matrix", "set_starting_thresholds")}
+```
+
+```{r cache=F}
+# knitr::knit_exit()
+```
+
+
+<!--
+# Scatter plot
+
+```{r no-pairwise_scatterplots, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime, dependson=c("define_cnvs", "get_signal_matrix", "set_starting_thresholds")}
+```
+-->
+
+```{r cache=F}
+# knitr::knit_exit()
+```
+
+
+# Reconstruct the tree
+
+## Naive tree
+
+```{r naive_tree, dependson=c("set_seed", "define_cnvs", "get_signal_matrix", "set_starting_thresholds"), cache.extra = file.info("resampling_functions.R")$mtime}
+source("resampling_functions.R")
+
+naive_cna_matrix <- old_signal_matrix
+for (i in 1:nrow(cnv_table)) {
+  this_cnv <- cnv_table[i, , drop = T]
+  naive_cna_matrix[, i] <- ifelse(sign(2 - this_cnv$threshold) ==
+                                    sign(this_cnv$threshold - naive_cna_matrix[, i]),
+                                  0,
+                                  2)
+}
+naive_tree <- get_tree_from_data_matrix(naive_cna_matrix, plot = T)
+
+
+# 
+# original_segcopy_data <- round(old_signal_matrix)
+# events_table <- as_tibble(rbind(2, original_segcopy_data)) %>%
+#   mutate_all(function(x) {ifelse(x == 2, 0, 1)})
+# unique_clones <- events_table %>%
+#   group_by_all() %>% summarise(num.cells = n())
+# print(paste(0, NA, nrow(unique_clones), NA, sum(events_table)))
+# naive_tree <- get_tree_from_data_matrix(original_segcopy_data, plot = T)
+# apply(old_signal_matrix, 2, range)
+```
+
+## Resampling tree
+
+```{r resampling_tree, dependson=c("set_seed", "define_cnvs", "get_signal_matrix", "set_starting_thresholds"), cache.extra = file.info("resampling_functions.R")$mtime}
+best_sample_data <- resample_matrix(
+  old_signal_matrix, starting_thresholds = starting_thresholds,
+  cns, num_loops = 10, num_samples = 1000, num_best = 100,
+  plot_intermediate_trees = F, use_num_events = F)
+best_sample_thresholds <- attr(best_sample_data, "thresholds")
+resampled_segcopy_data <- round(apply(best_sample_data, 1:2, mean))
+event_sizes <- cnv_table$end - cnv_table$start + 1
+tree.arcs <- get_tree_from_data_matrix(
+  resampled_segcopy_data, plot = T, event_sizes = event_sizes)
+       
+apply(best_sample_data, 1:2, mean) %>% as_tibble() %>% gather() %>%
+  mutate(key = sub("V","", key)) %>%
+  ggplot +
+  # geom_violin(aes(x = key, y = value), bw = 0.1, col = "grey") +
+  geom_dotplot(aes(x = key, y = value), binaxis = "y",
+               stackdir = "center", binwidth = 0.01) +
+  scale_x_discrete(limits = 1:ncol(resampled_segcopy_data))
+
+apply(best_sample_data, 1:2, mean) %>% as_tibble() %>% gather() %>%
+  mutate(key = sub("V","", key)) %>%
+  ggplot +
+  geom_violin(aes(x = key, y = value), bw = 0.1, col = "grey") +
+  geom_dotplot(aes(x = key, y = value), binaxis = "y",
+               stackdir = "center", binwidth = 0.01) +
+  scale_x_discrete(limits = 1:ncol(resampled_segcopy_data))
+
+colSums(!apply(best_sample_data, 1:2, function(x){all(x == x[1])}))
+```
+
+```{r, eval = F}
+# saveRDS(best_sample_data, "best_sample_data.rds")
+# best_sample_data <- readRDS("best_sample_data.rds")
+resampled_segcopy_data <- round(apply(best_sample_data[, , 1:20], 1:2, mean))
+tree.arcs <- get_tree_from_data_matrix(resampled_segcopy_data, plot = T)
+```
+
+<!--
+# QC
+
+```{r no-compare_original_segcopy_data_to_final_data_matrix, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+-->
+
+# CN events per clone {.tabset}
+
+```{r genome_plots_with_clones, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Density Plots {.tabset}
+
+```{r density_plots_post_tree, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+# Density Plot per clone {.tabset}
+
+```{r no-density_plots_per_clone, results = "asis", cache.extra = file.info("resampling_chunks.R")$mtime}
+```
+
+
+# Remove spurious events
+
+```{r remove_spurious events}
+# spurious_events <- c(6,10,11,25)
+# spurious_events <- c()
+# cnv_table <- cnv_table[-spurious_events, ]
+# resampled_segcopy_data <- resampled_segcopy_data[, -spurious_events]
+
+event_sizes <- cnv_table$end - cnv_table$start + 1
+tree.arcs <- get_tree_from_data_matrix(
+  resampled_segcopy_data, plot = T, event_sizes = event_sizes)
+```
+
+# COSMIC annotations {.tabset}
+
+```{r no-cosmic_annotations, results = "asis", cache = F}
+```
+
+```{r echo = F, cache = F}
+knitr::read_chunk("resampling_chunks.cosmic_annotations.R")
+```
+
+```{r cosmic_annotations_v90, results = "asis", cache = F}
+```
+
+
+# Annotated tree
+
+```{r no-annotated_tree, fig.height = 8, fig.width = 8}
+```
+
+```{r echo = F, cache = F}
+knitr::read_chunk("resampling_chunks.plot_final_trees.R")
+tree_title = "Pt1 PDX"
+```
+
+```{r plot_final_trees, fig.height = 8, fig.width = 8, cache = FALSE}
+```
+
+## Tree with event matrix
+
+```{r no-plot_final_trees_with_shared_events, fig.height = 12, fig.width = 12, cache = FALSE}
+source("plot_cna_tree.R")
+
+tree <- tree.arcs %>%
+  select(parent, child, label) %>%
+  rbind(tibble(parent = as.numeric(NA), child = 1, label = "")) %>%
+  transmute(node_id = child, parent_id = parent, events = label) %>%
+  arrange(node_id) %>%
+  mutate(size = attr(tree.arcs, "counts")[, 1, drop = T])
+
+datatable(cosmic_annotations, rownames = F)
+
+event_labels <- cosmic_annotations %>%
+  mutate(tree_label = case_when(
+    str_length(genes) > 1 & str_length(genes) < 50 ~ genes,
+    str_length(leukaemia_genes) > 1 & str_length(leukaemia_genes) < 50 ~
+      paste0(leukaemia_genes, "/..."),
+    str_length(leukaemia_genes) > 1 ~
+      paste0(sub("/[^/]*$", "", substr(leukaemia_genes, 1, 51)), "/..."),
+    str_length(genes) > 1 ~
+      paste0(sub("/[^/]*$", "", substr(genes, 1, 51)), "/..."),
+    TRUE ~ lesion
+  )) %>% pull(tree_label)
+event_labels <- paste(event_labels, ifelse(cnv_table$n < 2, "(loss)", "(gain)"), sep = " ")
+
+plot_cna_tree(tree, event_labels = event_labels, y_top = 19, title = tree_title, show_sizes = T)
+```
+
+### Control and treated mice
+
+```{r fig.height = 12, fig.width = 12, cache = FALSE}
+library(xlsx)
+meta_data <- read.xlsx(paste0("../data/Samples.xlsx"), sheetIndex = 1)
+all_cells <- multi_seg_renorm[["10"]] %>% colnames() %>% .[-c(1:3)]
+rownames(resampled_segcopy_data) <- all_cells
+meta_data %>% filter(Cell %in% all_cells) %>% select(Mouse, Day) %>% table()
+
+get_lineage_from_tree <- function(tree, root_id = 1, lineage, events = c()) {
+  if (missing(lineage)) {
+    lineage <- list()
+  }
+  children_node_ids <- tree %>% filter(parent_id == root_id) %>% pull(node_id)
+  these_events <- tree %>%
+    filter(node_id == root_id) %>%
+    pull(events) %>%
+    strsplit(",") %>%
+    unlist() %>%
+    as.numeric()
+  lineage[[root_id]] <- sort(c(events, these_events))
+
+  for (this_child_node_id in children_node_ids) {
+    lineage <- get_lineage_from_tree(tree, this_child_node_id, lineage,
+                                     events = lineage[[root_id]])
+  }
+  return(lineage)
+}
+lineage <- get_lineage_from_tree(tree)
+
+get_counts_from_cells <- function(segcopy_data, lineage, cells) {
+  counts <- sapply(lineage, function(event_ids) {
+    if (length(event_ids) == 0) {
+      sum(apply(segcopy_data[cells, ], 1, function(data_row) {all(data_row == 2)}))
+    } else {
+      sum(
+        apply(segcopy_data[cells, ], 1, function(data_row) {all(data_row[-event_ids] == 2)}) &
+          apply(segcopy_data[cells, ], 1, function(data_row) {all(data_row[event_ids] != 2)})
+        )
+    }
+    })
+  return(counts)
+}
+
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == "Ctrl" & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.ctrl.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+plot_cna_tree(tree %>% mutate(size = counts.ctrl.d0),
+              event_labels = event_labels, y_top = 19,
+              title = "Pt1 PDX - Ctrl d0", show_sizes = T)
+
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == "Ctrl" & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.ctrl.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+plot_cna_tree(tree %>% mutate(size = counts.ctrl.d28),
+              event_labels = event_labels, y_top = 19,
+              title = "Pt1 PDX - Ctrl d28", show_sizes = T)
+
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == "Chemo" & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.chemo.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+plot_cna_tree(tree %>% mutate(size = counts.chemo.d0),
+              event_labels = event_labels, y_top = 19,
+              title = "Pt1 PDX - Chemo d0", show_sizes = T)
+
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == "Chemo" & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.chemo.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+plot_cna_tree(tree %>% mutate(size = counts.chemo.d28),
+              event_labels = event_labels, y_top = 19,
+              title = "Pt1 PDX - Chemo d28", show_sizes = T)
+```
+
+
+
+```{r}
+plot_tree_for_mouse <- function(mouse) {
+  days <-  meta_data %>%
+    filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mouse) %>%
+    pull(Day) %>% unique()
+  for (day in days) {
+    cells <- meta_data %>%
+      filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mouse & Day == day) %>%
+      pull(Cell) %>%
+      as.character()
+    counts.chemo.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+    p <- plot_cna_tree(tree %>% mutate(size = counts.chemo.d0),
+                  event_labels = event_labels, y_top = 19,
+                  title = paste("Pt1 PDX -", mouse, day), show_sizes = T)
+    
+    print(p)
+  }
+}
+```
+
+### Mouse 1: 1L-294 / Control
+
+```{r, fig.height=8, fig.width=12}
+plot_tree_for_mouse("1L-294")
+```
+
+### Mouse 2: 1L1R-296 / Control
+
+```{r, fig.height=8, fig.width=12}
+plot_tree_for_mouse("1L1R-296")
+```
+
+### Mouse 3: 2R-295 / Treated
+
+```{r, fig.height=8, fig.width=12}
+plot_tree_for_mouse("2R-295")
+```
+
+### Mouse 4: 1R-295 / Treated
+
+```{r, fig.height=8, fig.width=12}
+plot_tree_for_mouse("1R-295")
+```
+
+### Mouse 5: mouse 18 / Treated
+
+```{r, fig.height=8, fig.width=12}
+plot_tree_for_mouse("mouse 18")
+```
+
+
+
+## Small tree version
+
+```{r no-plot_final_trees_small, fig.height = 6, fig.width = 6, cache = FALSE}
+plot_cna_tree(tree, event_labels = event_labels, y_top = 19, title = tree_title, show_cna_matrix = F)
+```
+
+
+```{r}
+# save.image("image.resampling_Pt1_PDX_100k.RData")
+# load("image.resampling_Pt1_PDX_100k.RData")
+```
+
+# Clonal evolution analyses
+
+```{r mapping_diagnosis_cells_on_PDX_clones}
+dia_env <- new.env()
+load("data_Pt1_dia_100k.rda", envir = dia_env)
+prim_segrenorm_data <- dia_env$segrenorm_data
+rm(dia_env)
+prim_signal_matrix <- matrix(0, nrow = ncol(prim_segrenorm_data) - 3, ncol = nrow(cnv_table))
+colnames(prim_signal_matrix) <- paste0("V", 1:ncol(prim_signal_matrix))
+rownames(prim_signal_matrix) <- colnames(prim_segrenorm_data)[-c(1:3)]
+for (i in 1:nrow(cnv_table)) {
+  this_cnv <- cnv_table[i, , drop = T]
+
+  prim_signal_matrix[, i] <- prim_segrenorm_data %>%
+    filter(CHR == this_cnv$chr & START >= this_cnv$start & END <= this_cnv$end) %>%
+    select(-c(1:3)) %>%
+    colMeans() * 2
+  prim_signal_matrix[, i] <- ifelse(sign(2 - this_cnv$threshold) ==
+                                    sign(this_cnv$threshold - prim_signal_matrix[, i]),
+                                  0,
+                                  2)
+}
+
+counts.diagnosis <- get_counts_from_cells(prim_signal_matrix, lineage,
+                                          rownames(prim_signal_matrix))
+```
+
+
+```{r clone_colors}
+index_tree_nodes <- function(this_node_id, this_index) {
+  if (missing(this_node_id)) {
+    this_node_id <- 1
+  }
+  if (missing(this_index)) {
+    this_index <- 1
+    tree.nodes$left_index <<- 0
+    tree.nodes$right_index <<- 0
+  }
+  tree.nodes <<- tree.nodes %>% mutate(left_index = ifelse(node_id == this_node_id, this_index, left_index))
+  this_index <- this_index + 1
+  children <- tree.arcs %>% filter(parent == this_node_id) %>% pull(child)
+  for (this_child_node_id in children) {
+    this_index <- index_tree_nodes(this_child_node_id, this_index)
+  }
+  tree.nodes <<- tree.nodes %>% mutate(right_index = ifelse(node_id == this_node_id, this_index, right_index))
+  this_index <- this_index + 1
+  return(invisible(this_index))
+}
+tree.nodes <- tree
+
+index_tree_nodes()
+
+get_sub_tree <- function(tree.nodes, this_node_id) {
+  tree.nodes %>%
+    filter(node_id == this_node_id) %>%
+    select(li = left_index, ri = right_index) %>%
+    expand_grid(tree.nodes) %>%
+    filter(left_index >= li & right_index <= ri) %>%
+    select(-li, -ri) %>%
+    arrange(left_index)
+}
+
+colors_for_subtrees <- function(tree.nodes, node_ids, colorRampPalettes = list()) {
+  tree_sections <- list()
+  root_id <- tree.nodes %>% filter(is.na(parent_id)) %>% pull(node_id) %>% as.character()
+  if (length(root_id) != 1) {
+    stop("Can't understand the tree. I am expecting the root to have a parent_id = NA")
+  }
+  node_ids <- unique(c(root_id, node_ids))
+  for (this_node in node_ids) {
+    tree_sections[[this_node]] <- get_sub_tree(tree.nodes, this_node) %>% pull(node_id)
+  }
+  # print(tree_sections)
+  for (i in 1:(length(node_ids) - 1)) {
+    for (j in (i+1):length(node_ids)) {
+      if (length(tree_sections[[i]]) > length(tree_sections[[j]])) {
+        tree_sections[[i]] <- setdiff(tree_sections[[i]], tree_sections[[j]])
+      } else {
+        tree_sections[[j]] <- setdiff(tree_sections[[j]], tree_sections[[i]])
+      }
+    }
+  }
+
+  if (missing(colorRampPalettes) | length(colorRampPalettes)) {
+    colorRampPalettes <- list(
+      colorRampPalette(rev(RColorBrewer::brewer.pal(9, "Reds")[-c(1, 9)])),
+      colorRampPalette(rev(RColorBrewer::brewer.pal(9, "Greens")[4:9])),
+      colorRampPalette(rev(RColorBrewer::brewer.pal(7, "Blues")[4:7])),
+      colorRampPalette(rev(RColorBrewer::brewer.pal(9, "Purples")[3:9])),
+      colorRampPalette(rev(RColorBrewer::brewer.pal(9, "PuRd")[4:9]))
+    )
+  }
+  colors = tibble(
+    node_id = unlist(tree_sections),
+    color = lapply(1:length(node_ids), function(n) {
+      colorRampPalettes[[n]](length(tree_sections[[n]]))
+      }) %>% unlist()
+  )
+  
+  return(colors)
+}
+
+tree.nodes %>% arrange(parent_id)
+# colors <- colors_for_subtrees(tree.nodes, node_ids = c(13, 22, 44))
+colors <- colors_for_subtrees(tree.nodes, node_ids = c(14, 26, 53, 4))
+```
+
+#### Tree legend
+
+```{r legend_tree, width = 8, height = 8, cache = F}
+plot_label <- function(tree, root_id = 1, depth = 1) {
+  if (root_id == 1) {
+    par("mar" = c(0, 0, 0, 0))
+    height <<- nrow(tree) + 1
+    plot(NA, xlim = c(0, 50), ylim = c(0, height), asp = 1)
+    label <- "normal"
+  } else {
+    label <- tree %>%
+      filter(child == root_id) %>%
+      pull(events)
+    lines(x = c(depth - 1.6, depth - 1),
+         y = c(height, height),
+         col = "black")
+  }
+  label <- gsub("\n", " + ", label)
+  text(x = depth, y = height, labels = label, adj = c(0, 0.5),
+       cex = 0.5)
+  col <- colors %>% filter(node_id == root_id) %>% pull(color)
+  rect(xleft = depth - 1, xright = depth - 0.2,
+       ybottom = height - 0.4, ytop = height + 0.4,
+       col = col)
+  children_node_ids <- tree %>%
+    filter(parent == root_id) %>%
+    pull(child)
+  cur_height <- height - 0.4
+  this_depth <- depth
+  height <<- height - 1
+  for (this_child_node_id in children_node_ids) {
+    lines(x = c(this_depth - 0.6, this_depth - 0.6),
+         y = c(cur_height, height),
+         col = "black")
+    plot_label(tree, this_child_node_id, depth + 1)
+  }
+}
+
+plot_label(tree.arcs)
+```
+
+## All clones
+
+### Jensen-Shannon divergence at Day 0 (all samples)
+
+We are using the philentropy package for this. From the doc:
+
+Function to compute the Jensen-Shannon Divergence JSD(P || Q) between two probability distributions $P$ and $Q$ with equal weights $\pi1 = \pi2 = 1/2$.
+
+The Jensen-Shannon Divergence $JSD(P||Q)$ between two probability distributions $P$ and $Q$ is defined as:
+
+$$JSP(P||Q) = 0.5 ∗ (KL(P||R) + KL(Q||R))$$
+
+where $R = 0.5 ∗ (P + Q)$ denotes the mid-point of the probability vectors $P$ and $Q$, and $KL(P || R)$, $KL(Q || R)$ denote the Kullback-Leibler Divergence of $P$ and $R$, as well as $Q$ and $R$.
+
+```{r jensen-shannon, cache = F, fig.height=5, fig.width=5}
+# save.image()
+# load(".RData")
+library(philentropy)
+mice_d0 <- meta_data %>%
+  filter(Patient == "Pt1" & Mouse != "Patient" & Day == "d0") %>%
+  pull(Mouse) %>%
+  unique() %>% as.character()
+
+jsd_matrix <- matrix(0, ncol = length(mice_d0), nrow = length(mice_d0))
+rownames(jsd_matrix) <- colnames(jsd_matrix) <- mice_d0
+
+for (i in 1:length(mice_d0)) {
+  for (j in 1:length(mice_d0)) {
+    cells <- meta_data %>%
+      filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mice_d0[i] & Day == "d0") %>%
+      pull(Cell) %>%
+      as.character()
+    counts.mouse.i <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+    cells <- meta_data %>%
+      filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mice_d0[j] & Day == "d0") %>%
+      pull(Cell) %>%
+      as.character()
+    counts.mouse.j <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+    JSD <- jensen_shannon(counts.mouse.i / sum(counts.mouse.i),
+                          counts.mouse.j / sum(counts.mouse.j),
+                          testNA = F, unit = "log2")
+    # JSDiv <- gJSD(cbind(counts.mouse.i / sum(counts.mouse.i), counts.mouse.j / sum(counts.mouse.j)))
+    jsd_matrix[i, j] <- JSD
+    # jsd_matrix[j, i] <- JSDiv
+  }
+}
+heatmap(jsd_matrix, scale = "none",
+        col = colorRampPalette(c("red","pink", "white", "cyan", "blue"))(100))
+
+mice_d0 <- sub("1L-294", "Mouse 1", mice_d0)
+mice_d0 <- sub("1L1R-296", "Mouse 2", mice_d0)
+mice_d0 <- sub("2R-295", "Mouse 3", mice_d0)
+mice_d0 <- sub("1R-295", "Mouse 4", mice_d0)
+mice_d0 <- sub("mouse 18", "Mouse 5", mice_d0)
+rownames(jsd_matrix) <- colnames(jsd_matrix) <- mice_d0
+
+write.csv(jsd_matrix, "pt1_scWGS_jensen-shannon.csv")
+gplots::heatmap.2(jsd_matrix, scale = "none",
+        col = colorRampPalette(c("red","pink", "white", "cyan", "blue"))(100),
+        trace = "none", key = T, keysize = 1.5, asp = 1, dendrogram = "none",
+        density.info = "none",
+        margins = c(10, 10)
+        )
+```
+
+### Barplots at Day 0 and Day 28 (all samples)
+
+
+```{r, fig.width=4}
+all_samples <- meta_data %>%
+  filter(Patient == "Pt1" & Mouse != "Patient") %>%
+  select(Treatment, Mouse, Day) %>%
+  unique() %>%
+  arrange(Treatment, Mouse, Day)
+
+engraftment_counts <- apply(all_samples, 1, function(this_sample) {
+  mouse <- this_sample[2]
+  day <- this_sample[3]
+  cells <- meta_data %>%
+    filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mouse & Day == day) %>%
+    pull(Cell) %>%
+    as.character()
+  tibble(treatment = this_sample[1], mouse = this_sample[2], day = this_sample[3], clone = tree$node_id,
+         count = get_counts_from_cells(resampled_segcopy_data, lineage, cells))
+}) %>% bind_rows()
+
+diagnosis_counts <-
+  tibble(treatment = "Diagnosis", mouse = "Patient", day = "Diagnosis", clone = tree$node_id,
+         count = counts.diagnosis)
+
+engraftment_counts <- engraftment_counts %>% rbind(diagnosis_counts)
+
+engraftment_counts %>%
+  filter(day %in% c("d0", "Diagnosis")) %>%
+  mutate(clone = factor(clone, levels = rev(colors$node_id))) %>%
+  ggplot() +
+  geom_col(aes(x = mouse, y = count, fill = clone), position = "fill", col = "black", show.legend = F) +
+  scale_fill_manual(limits = colors$node_id, values = colors$color) +
+  scale_x_discrete(labels = c("1L-294" = "M1 (1L-294/Ctrl)",
+                              "1L1R-296" = "M2 (1L1R-296/Ctrl)",
+                              "2R-295" = "M3 (2R-295/Chemo)",
+                              "1R-295" = "M4 (1R-295/Chemo)",
+                              "mouse 18" = "M5 (mouse18/Chemo)",
+                              "Patient" = "Pt1 (diagnosis)"),
+                   limits = c("1L-294", "1L1R-296", "2R-295", "1R-295", "mouse 18", "Patient")) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Day 0") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        panel.grid = element_blank(), axis.ticks.x = element_blank(),
+        legend.position = "bottom", text = element_text(family = "Arial"),
+        legend.box.spacing = unit(-1, "points"),
+        legend.box.margin = margin(0, 0, 0, 0),
+        legend.margin = margin(1, 5, 1, 5))
+
+engraftment_counts %>%
+  filter(day == "d28") %>%
+  mutate(clone = factor(clone, levels = rev(colors$node_id))) %>%
+  ggplot() +
+  geom_col(aes(x = mouse, y = count, fill = clone), position = "fill", col = "black", show.legend = F) +
+  scale_fill_manual(limits = colors$node_id, values = colors$color) +
+  scale_x_discrete(labels = c("1L-294" = "M1 (1L-294/Ctrl)",
+                              "1L1R-296" = "M2 (1L1R-296/Ctrl)",
+                              "2R-295" = "M3 (2R-295/Chemo)",
+                              "1R-295" = "M4 (1R-295/Chemo)",
+                              "mouse 18" = "M5 (mouse18/Chemo)"),
+                   limits = c("1L-294", "1L1R-296", "2R-295", "1R-295", "mouse 18")) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Day 28") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        panel.grid = element_blank(), axis.ticks.x = element_blank(),
+        legend.position = "bottom", text = element_text(family = "Arial"),
+        legend.box.spacing = unit(-1, "points"),
+        legend.box.margin = margin(0, 0, 0, 0),
+        legend.margin = margin(1, 5, 1, 5))
+
+print("Shared clones between 1R-295 and mouse 18 at Day 0:")  
+engraftment_counts %>% filter(day == "d0") %>% filter(mouse %in% c("1R-295", "mouse 18")) %>% filter(count > 0) %>% group_by(clone) %>% summarise(n = n())
+
+
+engraftment_counts %>%
+  rename(Mouse = mouse,
+         Treatment = treatment,
+         Day = day,
+         CloneID = clone,
+         Counts = count) %>%
+  mutate(Patient = "Pt1") %>%
+  select(Patient, Mouse, Treatment, Day, CloneID, Counts) %>%
+  group_by(CloneID) %>%
+  mutate(n = sum(Counts)) %>%
+  filter(n > 0) %>%
+  select(-n) %>%
+  ungroup() %>%
+  arrange(desc(Treatment), Mouse) %>%
+  write_csv("pt1_scWGS_clonal_composition.csv")
+```
+
+### Shanon Entropy all samples
+
+```{r shannon_entropy, cache = F}
+library("entropy")
+
+all_samples <- meta_data %>%
+  filter(Patient == "Pt1" & Mouse != "Patient") %>%
+  select(Treatment, Mouse, Day) %>%
+  unique() %>%
+  arrange(Treatment, Mouse, Day)
+
+# engraftment_counts <- tibble(mouse = "", day = "", clone = 0, count = 0)[0, ]
+entropy.values <- apply(all_samples, 1, function(this_sample) {
+  mouse <- this_sample[2]
+  day <- this_sample[3]
+  cells <- meta_data %>%
+    filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mouse & Day == day) %>%
+    pull(Cell) %>%
+    as.character()
+  counts.sample <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+  # print(counts.sample)
+  entropy <- entropy(counts.sample,
+          method = "shrink", unit = "log", verbose = FALSE)
+  entropy
+})
+
+entropy <- cbind(all_samples, entropy.values)
+
+entropy
+
+entropy %>%
+  ggplot() +
+  geom_col(aes(x = Mouse, y = entropy.values, fill = Day), position = position_dodge()) +
+  facet_wrap( ~ Treatment, scales = "free_x")
+```
+
+### Fish plots all clones
+
+```{r timescape, cache = F}
+library(timescape)
+
+tree_edges <- data.frame(source = tree.nodes$parent_id[!is.na(tree.nodes$parent_id)],
+                         target = tree.nodes$node_id[!is.na(tree.nodes$parent_id)])
+```
+
+#### Control mice
+
+Mouse 1 and Mouse 2
+
+```{r timescape.ctrl, cache = F}
+this_treatment <- "Ctrl"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == this_treatment & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == this_treatment & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### Treated mice
+
+Mouse 4 and Mouse 5
+
+```{r timescape.chemo, cache = F}
+this_treatment <- "Chemo"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse %in% c("1R-295", "mouse 18") &
+           Treatment == this_treatment & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse %in% c("1R-295", "mouse 18") &
+           Treatment == this_treatment & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### 1L-294 (Ctrl / Mouse 1)
+
+```{r timescape.m1, cache = F}
+library(timescape)
+
+tree_edges <- data.frame(source = tree.nodes$parent_id[!is.na(tree.nodes$parent_id)],
+                         target = tree.nodes$node_id[!is.na(tree.nodes$parent_id)])
+this_mouse <- "1L-294"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### 1L1R-296 (Ctrl / Mouse 2)
+
+```{r timescape.m2, cache = F}
+this_mouse <- "1L1R-296"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### 1R-295 (Treated / Mouse 4)
+
+```{r timescape.m4, cache = F}
+library(timescape)
+
+tree_edges <- data.frame(source = tree.nodes$parent_id[!is.na(tree.nodes$parent_id)],
+                         target = tree.nodes$node_id[!is.na(tree.nodes$parent_id)])
+this_mouse <- "1R-295"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### Mouse 18 (Treated / Mouse 5)
+
+```{r timescape.m5, cache = F}
+library(timescape)
+
+tree_edges <- data.frame(source = tree.nodes$parent_id[!is.na(tree.nodes$parent_id)],
+                         target = tree.nodes$node_id[!is.na(tree.nodes$parent_id)])
+this_mouse <- "mouse 18"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+### Clones systematically disappearing from both treated mice at Day 28
+
+```{r, cache = F, results = "hold"}
+counts.1R_295.d0 <- engraftment_counts %>% filter(mouse == "1R-295" & day == "d0") %>% pull(count)
+clones.1R_295.d0 <- which(counts.1R_295.d0 > 0)
+counts.1R_295.d28 <- engraftment_counts %>% filter(mouse == "1R-295" & day == "d28") %>% pull(count)
+clones.1R_295.d28 <- which(counts.1R_295.d28 > 0)
+
+counts.mouse_18.d0 <- engraftment_counts %>% filter(mouse == "mouse 18" & day == "d0") %>% pull(count)
+clones.mouse_18.d0 <- which(counts.mouse_18.d0 > 0)
+counts.mouse_18.d28 <- engraftment_counts %>% filter(mouse == "mouse 18" & day == "d28") %>% pull(count)
+clones.mouse_18.d28 <- which(counts.mouse_18.d28 > 0)
+
+clones_disappearing_in_1R_295 <- setdiff(clones.1R_295.d0, clones.1R_295.d28)
+clones_disappearing_in_mouse_18 <- setdiff(clones.mouse_18.d0, clones.mouse_18.d28)
+clones_disappearing_in_both_mice <- intersect(clones_disappearing_in_1R_295,
+                                              clones_disappearing_in_mouse_18)
+clones_present_in_both_mice_at_d0 <- intersect(clones.1R_295.d0, clones.mouse_18.d0)
+clones_present_in_either_mice_at_d0 <- union(clones.1R_295.d0, clones.mouse_18.d0)
+
+print(paste("Number of clones disappearing in both mice:",
+            length(clones_disappearing_in_both_mice)))
+print(paste("Number of clones present in both mice at Day 0:",
+            length(clones_present_in_both_mice_at_d0)))
+print(paste("Number of clones present in either mice at Day 0:",
+            length(clones_present_in_either_mice_at_d0)))
+
+print(paste("Number of cells in clones disappearing in both mice:",
+            sum(counts.1R_295.d0[clones_disappearing_in_both_mice],
+                counts.mouse_18.d0[clones_disappearing_in_both_mice])))
+print(paste("Number of cells in clones present in both mice at Day 0:",
+            sum(counts.1R_295.d0[clones_present_in_both_mice_at_d0],
+                counts.mouse_18.d0[clones_present_in_both_mice_at_d0])))
+print(paste("Number of cells in clones present in either mice at Day 0:",
+            sum(counts.1R_295.d0[clones_present_in_either_mice_at_d0],
+                counts.mouse_18.d0[clones_present_in_either_mice_at_d0])))
+```
+
+
+## Trimmed clones
+
+These results are the same as above, but after removing the nodes at the tips of the tree (leaves) with just one cell across all PDXs.
+
+```{r get_trimmed_tree_with_counts, cache = F}
+get_trimmed_tree_with_counts <- function(indexed.tree.nodes, original_counts, min_size = 2) {
+  temp_indexed.tree.nodes <- indexed.tree.nodes %>%
+    mutate(to.be.pruned = (left_index == right_index - 1 & size < min_size)) %>%
+    mutate(original_counts = original_counts)
+
+  counts_to_be_added <- temp_indexed.tree.nodes %>%
+                filter(to.be.pruned) %>%
+                select(collapsed_node_id = parent_id, counts_to_be_added = original_counts) %>%
+                mutate(counts_to_be_added = replace_na(counts_to_be_added, 0)) %>%
+                group_by(collapsed_node_id) %>%
+                summarise(counts_to_be_added = sum(counts_to_be_added)) %>%
+                filter(counts_to_be_added > 0) %>%
+                ungroup()
+
+  counts_on_trimmed_tree <- temp_indexed.tree.nodes %>%
+    left_join(counts_to_be_added,
+              by = c("node_id" = "collapsed_node_id")) %>%
+    mutate(counts_to_be_added = replace_na(counts_to_be_added, 0)) %>%
+    mutate(trimmed_counts = original_counts + counts_to_be_added) %>%
+    filter(to.be.pruned == FALSE)
+    # select(-counts_to_be_added)
+    
+  return(counts_on_trimmed_tree)
+}
+
+trimmed_tree.nodes <- get_trimmed_tree_with_counts(tree.nodes, tree.nodes$size)
+
+trimmed_counts.diagnosis <- get_trimmed_tree_with_counts(tree.nodes, counts.diagnosis)$trimmed_counts
+```
+
+```{r}
+full_table <- trimmed_tree.nodes %>%
+  select(node_id, parent_id, events, size = trimmed_counts) %>%
+  as_tibble() %>%
+  dplyr::rename(num.cells = size) %>%
+  mutate(coordinates = sapply(events, function(x) {
+    e <- paste(sapply(strsplit(x, ",")[[1]], function(y) {
+      y <- as.numeric(y)
+      if (cnv_table[y, "start"] == 0 & cnv_table[y, "end"] == 0) {
+        cnv_table[y, "chr"]
+      } else {
+        paste0(cnv_table[y, "chr"], ":", cnv_table[y, "start"], "-", cnv_table[y, "end"])
+      }
+    }), collapse = ",")
+    return(e)
+  })) %>%
+  mutate(CN = sapply(events, function(x) {
+    e <- paste(sapply(strsplit(x, ",")[[1]], function(y) {
+      y <- as.numeric(y)
+      ifelse(cnv_table[y, "n"] > 2, "gain", "loss")
+    }), collapse = ",")
+    return(e)
+  })) %>%
+  mutate(lengths = sapply(events, function(x) {
+    e <- paste(sapply(strsplit(x, ",")[[1]], function(y) {
+      cnv_table[as.numeric(y), "end"] - cnv_table[as.numeric(y), "start"] + 1
+    }), collapse = ";")
+    return(e)
+  })) %>%
+  mutate(cosmic_genes = sapply(events, function(x) {
+    e <- paste(sapply(strsplit(x, ",")[[1]], function(y) {
+      ifelse(cosmic_annotations[y, "genes"] == "", "-", cosmic_annotations[y, "genes"])}),
+      collapse = ";")
+    return(e)
+  })) %>%
+  mutate(cosmic_leukaemia_genes = sapply(events, function(x) {
+    e <- paste(sapply(strsplit(x, ",")[[1]], function(y) {
+      ifelse(cosmic_annotations[y, "leukaemia_genes"] == "", "-", cosmic_annotations[y, "leukaemia_genes"])}),
+      collapse = ";")
+    return(e)
+  }))
+full_table %>% write_csv("pt1_scWGS_trimmed_tree.csv")
+```
+
+### Jensen-Shannon divergence at Day 0 (trimmed tree)
+
+We are using the philentropy package for this. From the doc:
+
+Function to compute the Jensen-Shannon Divergence JSD(P || Q) between two probability distributions $P$ and $Q$ with equal weights $\pi1 = \pi2 = 1/2$.
+
+The Jensen-Shannon Divergence $JSD(P||Q)$ between two probability distributions $P$ and $Q$ is defined as:
+
+$$JSP(P||Q) = 0.5 ∗ (KL(P||R) + KL(Q||R))$$
+
+where $R = 0.5 ∗ (P + Q)$ denotes the mid-point of the probability vectors $P$ and $Q$, and $KL(P || R)$, $KL(Q || R)$ denote the Kullback-Leibler Divergence of $P$ and $R$, as well as $Q$ and $R$.
+
+```{r jensen-shannon_trimmed, cache = F, fig.height=5, fig.width=5}
+library(philentropy)
+mice_d0 <- meta_data %>%
+  filter(Patient == "Pt1" & Mouse != "Patient" & Day == "d0") %>%
+  pull(Mouse) %>%
+  unique() %>% as.character()
+
+jsd_matrix <- matrix(0, ncol = length(mice_d0), nrow = length(mice_d0))
+rownames(jsd_matrix) <- colnames(jsd_matrix) <- mice_d0
+
+for (i in 1:length(mice_d0)) {
+  for (j in 1:length(mice_d0)) {
+    cells <- meta_data %>%
+      filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mice_d0[i] & Day == "d0") %>%
+      pull(Cell) %>%
+      as.character()
+    counts.mouse.i <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+    counts.mouse.i <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.i)$trimmed_counts
+
+    cells <- meta_data %>%
+      filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mice_d0[j] & Day == "d0") %>%
+      pull(Cell) %>%
+      as.character()
+    counts.mouse.j <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+    counts.mouse.j <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.j)$trimmed_counts
+
+    JSD <- jensen_shannon(counts.mouse.i / sum(counts.mouse.i),
+                          counts.mouse.j / sum(counts.mouse.j),
+                          testNA = F, unit = "log2")
+    # JSDiv <- gJSD(cbind(counts.mouse.i / sum(counts.mouse.i), counts.mouse.j / sum(counts.mouse.j)))
+    jsd_matrix[i, j] <- JSD
+    # jsd_matrix[j, i] <- JSDiv
+  }
+}
+jsd_matrix
+heatmap(jsd_matrix, scale = "none",
+        col = colorRampPalette(c("red","pink", "white", "cyan", "blue"))(100))
+
+mice_d0 <- sub("1L-294", "Mouse 1", mice_d0)
+mice_d0 <- sub("1L1R-296", "Mouse 2", mice_d0)
+mice_d0 <- sub("2R-295", "Mouse 3", mice_d0)
+mice_d0 <- sub("1R-295", "Mouse 4", mice_d0)
+mice_d0 <- sub("mouse 18", "Mouse 5", mice_d0)
+rownames(jsd_matrix) <- colnames(jsd_matrix) <- mice_d0
+
+write.csv(jsd_matrix, "pt1_scWGS_jensen-shannon.trimmed.csv")
+gplots::heatmap.2(jsd_matrix, scale = "none",
+        col = colorRampPalette(c("red","pink", "white", "cyan", "blue"))(100),
+        trace = "none", key = T, keysize = 1.5, asp = 1, dendrogram = "none",
+        density.info = "none",
+        margins = c(10, 10)
+        )
+```
+
+### Barplots at Day 0 and Day 28 (trimmed tree)
+
+```{r, fig.width=4}
+all_samples <- meta_data %>%
+  filter(Patient == "Pt1" & Mouse != "Patient") %>%
+  select(Treatment, Mouse, Day) %>%
+  unique() %>%
+  arrange(Treatment, Mouse, Day)
+
+engraftment_counts <- apply(all_samples, 1, function(this_sample) {
+  mouse <- this_sample[2]
+  day <- this_sample[3]
+  cells <- meta_data %>%
+    filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mouse & Day == day) %>%
+    pull(Cell) %>%
+    as.character()
+  counts <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+  trimmed.tree_nodes <- get_trimmed_tree_with_counts(tree.nodes, counts)
+  tibble(treatment = this_sample[1], mouse = this_sample[2], day = this_sample[3], clone = trimmed.tree_nodes$node_id,
+         count = trimmed.tree_nodes$trimmed_counts)
+}) %>% bind_rows()
+
+diagnosis_counts <-
+  tibble(treatment = "Diagnosis", mouse = "Patient", day = "Diagnosis",
+         clone = trimmed_tree.nodes$node_id,
+         count = trimmed_counts.diagnosis)
+
+engraftment_counts <- engraftment_counts %>% rbind(diagnosis_counts)
+
+engraftment_counts %>%
+  filter(day %in% c("d0", "Diagnosis")) %>%
+  mutate(clone = factor(clone, levels = rev(colors$node_id))) %>%
+  ggplot() +
+  geom_col(aes(x = mouse, y = count, fill = clone), position = "fill", col = "black", show.legend = F) +
+  scale_fill_manual(limits = colors$node_id, values = colors$color) +
+  scale_x_discrete(labels = c("1L-294" = "M1 (1L-294/Ctrl)",
+                              "1L1R-296" = "M2 (1L1R-296/Ctrl)",
+                              "2R-295" = "M3 (2R-295/Chemo)",
+                              "1R-295" = "M4 (1R-295/Chemo)",
+                              "mouse 18" = "M5 (mouse18/Chemo)",
+                              "Patient" = "Pt1 (diagnosis)"),
+                   limits = c("1L-294", "1L1R-296", "2R-295", "1R-295", "mouse 18", "Patient")) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Day 0") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        panel.grid = element_blank(), axis.ticks.x = element_blank(),
+        legend.position = "bottom", text = element_text(family = "Arial"),
+        legend.box.spacing = unit(-1, "points"),
+        legend.box.margin = margin(0, 0, 0, 0),
+        legend.margin = margin(1, 5, 1, 5))
+
+  engraftment_counts %>%
+  filter(day == "d28") %>%
+  mutate(clone = factor(clone, levels = rev(colors$node_id))) %>%
+  ggplot() +
+  geom_col(aes(x = mouse, y = count, fill = clone), position = "fill", col = "black", show.legend = F) +
+  scale_fill_manual(limits = colors$node_id, values = colors$color) +
+  scale_x_discrete(labels = c("1L-294" = "M1 (1L-294/Ctrl)",
+                              "1L1R-296" = "M2 (1L1R-296/Ctrl)",
+                              "2R-295" = "M3 (2R-295/Chemo)",
+                              "1R-295" = "M4 (1R-295/Chemo)",
+                              "mouse 18" = "M5 (mouse18/Chemo)"),
+                   limits = c("1L-294", "1L1R-296", "2R-295", "1R-295", "mouse 18")) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Day 28") +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        panel.grid = element_blank(), axis.ticks.x = element_blank(),
+        legend.position = "bottom", text = element_text(family = "Arial"),
+        legend.box.spacing = unit(-1, "points"),
+        legend.box.margin = margin(0, 0, 0, 0),
+        legend.margin = margin(1, 5, 1, 5))
+
+print("Shared clones between 1R-295 and mouse 18 at Day 0:")  
+engraftment_counts %>% filter(day == "d0") %>% filter(mouse %in% c("1R-295", "mouse 18")) %>% filter(count > 0) %>% group_by(clone) %>% summarise(n = n())
+
+engraftment_counts %>%
+  rename(Mouse = mouse,
+         Treatment = treatment,
+         Day = day,
+         CloneID = clone,
+         Counts = count) %>%
+  mutate(Patient = "Pt1") %>%
+  select(Patient, Mouse, Treatment, Day, CloneID, Counts) %>%
+  group_by(CloneID) %>%
+  mutate(n = sum(Counts)) %>%
+  filter(n > 0) %>%
+  select(-n) %>%
+  ungroup() %>%
+  arrange(desc(Treatment), Mouse) %>%
+  write_csv("pt1_scWGS_clonal_composition.trimmed_tree.csv")
+```
+
+### Shanon Entropy (trimmed tree)
+
+```{r shannon_entropy_trimmed, cache = F}
+library("entropy")
+
+all_samples <- meta_data %>%
+  filter(Patient == "Pt1" & Mouse != "Patient") %>%
+  select(Treatment, Mouse, Day) %>%
+  unique() %>%
+  arrange(Treatment, Mouse, Day)
+
+entropy.trimmed.values <- apply(all_samples, 1, function(this_sample) {
+  mouse <- this_sample[2]
+  day <- this_sample[3]
+  cells <- meta_data %>%
+    filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == mouse & Day == day) %>%
+    pull(Cell) %>%
+    as.character()
+  counts.sample <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+  these_cells.trimmed_tree <- get_trimmed_tree_with_counts(tree.nodes, counts.sample)
+  # print(paste(these_cells.trimmed_tree$trimmed_counts, collapse = ","))
+  entropy <- entropy(these_cells.trimmed_tree$trimmed_counts,
+          method = "shrink", unit = "log", verbose = TRUE)
+  entropy
+})
+entropy <- cbind(all_samples, entropy.trimmed.values)
+
+entropy
+
+entropy %>%
+  ggplot() +
+  geom_col(aes(x = Mouse, y = entropy.trimmed.values, fill = Day), position = position_dodge()) +
+  facet_wrap( ~ Treatment, scales = "free_x")
+```
+
+
+### Fish plots
+
+```{r trimmed_timescape, cache = F}
+library(timescape)
+
+trimmed_tree_edges <- data.frame(
+  source = trimmed_tree.nodes$parent_id[!is.na(trimmed_tree.nodes$parent_id)],
+  target = trimmed_tree.nodes$node_id[!is.na(trimmed_tree.nodes$parent_id)])
+```
+
+#### Control mice
+
+Mouse 1 and Mouse 2
+
+```{r trimmed_timescape.ctrl, cache = F}
+this_treatment <- "Ctrl"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == this_treatment & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d0 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d0)$trimmed_counts
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Treatment == this_treatment & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d28 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d28)$trimmed_counts
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(trimmed_counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = trimmed_counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### Treated mice
+
+Mouse 4 and Mouse 5
+
+```{r trimmed_timescape.chemo, cache = F}
+this_treatment <- "Chemo"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse %in% c("1R-295", "mouse 18") &
+           Treatment == this_treatment & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d0 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d0)$trimmed_counts
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse %in% c("1R-295", "mouse 18") &
+           Treatment == this_treatment & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d28 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d28)$trimmed_counts
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(trimmed_counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = trimmed_counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### 1L-294 (Ctrl / Mouse 1)
+
+```{r trimmed_timescape.m1, cache = F}
+library(timescape)
+
+tree_edges <- data.frame(source = tree.nodes$parent_id[!is.na(tree.nodes$parent_id)],
+                         target = tree.nodes$node_id[!is.na(tree.nodes$parent_id)])
+this_mouse <- "1L-294"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d0 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d0)$trimmed_counts
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d28 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d28)$trimmed_counts
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(trimmed_counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = trimmed_counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### 1L1R-296 (Ctrl / Mouse 2)
+
+```{r trimmed_timescape.m2, cache = F}
+this_mouse <- "1L1R-296"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d0 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d0)$trimmed_counts
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d28 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d28)$trimmed_counts
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(trimmed_counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = trimmed_counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### 1R-295 (Treated / Mouse 4)
+
+```{r trimmed_timescape.m4, cache = F}
+library(timescape)
+
+tree_edges <- data.frame(source = tree.nodes$parent_id[!is.na(tree.nodes$parent_id)],
+                         target = tree.nodes$node_id[!is.na(tree.nodes$parent_id)])
+this_mouse <- "1R-295"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d0 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d0)$trimmed_counts
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d28 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d28)$trimmed_counts
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(trimmed_counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = trimmed_counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### Mouse 18 (Treated / Mouse 5)
+
+```{r trimmed_timescape.m5, cache = F}
+library(timescape)
+
+tree_edges <- data.frame(source = tree.nodes$parent_id[!is.na(tree.nodes$parent_id)],
+                         target = tree.nodes$node_id[!is.na(tree.nodes$parent_id)])
+this_mouse <- "mouse 18"
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d0") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d0 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d0 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d0)$trimmed_counts
+cells <- meta_data %>%
+  filter(Cell %in% all_cells & Patient == "Pt1" & Mouse == this_mouse & Day == "d28") %>%
+  pull(Cell) %>%
+  as.character()
+counts.mouse.d28 <- get_counts_from_cells(resampled_segcopy_data, lineage, cells)
+counts.mouse.d28 <- get_trimmed_tree_with_counts(tree.nodes, counts.mouse.d28)$trimmed_counts
+
+# Workaround for Timescape buglet
+counts.mouse.d0[which(trimmed_counts.diagnosis > 0 & counts.mouse.d28 > 0 & counts.mouse.d0 == 0)] <- 0.001
+
+clonal_prev <- rbind(
+  tibble(timepoint = "Diagnosis",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = trimmed_counts.diagnosis),
+  tibble(timepoint = "Day 0",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d0),
+  tibble(timepoint = "Day 28",
+         clone_id = trimmed_tree.nodes$node_id,
+         clonal_prev = counts.mouse.d28)
+)
+
+timescape(clonal_prev,
+          tree_edges, 
+          clone_colours = colors %>% rename(clone_id = node_id, colour = color),
+          alpha = 0)
+```
+
+#### Tree legend
+
+```{r trimmed_legend_tree, width = 8, height = 8, cache = F}
+plot_label <- function(tree, root_id = 1, depth = 1) {
+  if (root_id == 1) {
+    par("mar" = c(0, 0, 0, 0))
+    height <<- nrow(tree) + 1
+    plot(NA, xlim = c(0, 50), ylim = c(0, height), asp = 1)
+    label <- "normal"
+  } else {
+    label <- tree %>%
+      filter(child == root_id) %>%
+      pull(events)
+    lines(x = c(depth - 1.6, depth - 1),
+         y = c(height, height),
+         col = "black")
+  }
+  label <- gsub("\n", " + ", label)
+  text(x = depth, y = height, labels = label, adj = c(0, 0.5),
+       cex = 0.5)
+  col <- colors %>% filter(node_id == root_id) %>% pull(color)
+  rect(xleft = depth - 1, xright = depth - 0.2,
+       ybottom = height - 0.4, ytop = height + 0.4,
+       col = col)
+  children_node_ids <- tree %>%
+    filter(parent == root_id) %>%
+    pull(child)
+  cur_height <- height - 0.4
+  this_depth <- depth
+  height <<- height - 1
+  for (this_child_node_id in children_node_ids) {
+    lines(x = c(this_depth - 0.6, this_depth - 0.6),
+         y = c(cur_height, height),
+         col = "black")
+    plot_label(tree, this_child_node_id, depth + 1)
+  }
+}
+
+trimmed_tree.arcs <- trimmed_tree.nodes %>%
+  transmute(parent = parent_id, child = node_id, label = events) %>%
+  filter(!is.na(parent)) %>%
+  left_join(tree.arcs, by = c("parent", "child", "label"))
+plot_label(trimmed_tree.arcs)
+```
+
+
+### Clones systematically disappearing from both treated mice at Day 28
+
+```{r, cache = F, results = "hold"}
+counts.1R_295.d0 <- engraftment_counts %>% filter(mouse == "1R-295" & day == "d0") %>% pull(count)
+clones.1R_295.d0 <- which(counts.1R_295.d0 > 0)
+counts.1R_295.d28 <- engraftment_counts %>% filter(mouse == "1R-295" & day == "d28") %>% pull(count)
+clones.1R_295.d28 <- which(counts.1R_295.d28 > 0)
+
+counts.mouse_18.d0 <- engraftment_counts %>% filter(mouse == "mouse 18" & day == "d0") %>% pull(count)
+clones.mouse_18.d0 <- which(counts.mouse_18.d0 > 0)
+counts.mouse_18.d28 <- engraftment_counts %>% filter(mouse == "mouse 18" & day == "d28") %>% pull(count)
+clones.mouse_18.d28 <- which(counts.mouse_18.d28 > 0)
+
+clones_disappearing_in_1R_295 <- setdiff(clones.1R_295.d0, clones.1R_295.d28)
+clones_disappearing_in_mouse_18 <- setdiff(clones.mouse_18.d0, clones.mouse_18.d28)
+clones_disappearing_in_both_mice <- intersect(clones_disappearing_in_1R_295,
+                                              clones_disappearing_in_mouse_18)
+clones_present_in_both_mice_at_d0 <- intersect(clones.1R_295.d0, clones.mouse_18.d0)
+clones_present_in_either_mice_at_d0 <- union(clones.1R_295.d0, clones.mouse_18.d0)
+
+print(paste("Number of clones disappearing in both mice:",
+            length(clones_disappearing_in_both_mice)))
+print(paste("Number of clones present in both mice at Day 0:",
+            length(clones_present_in_both_mice_at_d0)))
+print(paste("Number of clones present in either mice at Day 0:",
+            length(clones_present_in_either_mice_at_d0)))
+
+print(paste("Number of cells in clones disappearing in both mice:",
+            sum(counts.1R_295.d0[clones_disappearing_in_both_mice],
+                counts.mouse_18.d0[clones_disappearing_in_both_mice])))
+print(paste("Number of cells in clones present in both mice at Day 0:",
+            sum(counts.1R_295.d0[clones_present_in_both_mice_at_d0],
+                counts.mouse_18.d0[clones_present_in_both_mice_at_d0])))
+print(paste("Number of cells in clones present in either mice at Day 0:",
+            sum(counts.1R_295.d0[clones_present_in_either_mice_at_d0],
+                counts.mouse_18.d0[clones_present_in_either_mice_at_d0])))
+```
+
+----
