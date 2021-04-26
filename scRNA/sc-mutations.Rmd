@@ -1,0 +1,448 @@
+---
+title: "scRNA mutational analysis"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+---
+
+# Introduction
+
+In addition to calling CNV from the scWGS and expression from the scRNA data, there is also the possibility of calling variants from the reads, albeit this is limted by the quality and reliability of the data.
+
+There have been several attempts at calling variants on the scRNA and scWGS of the PDXs, using different tools. Here we report the results of monovar, which assumes diploid state and call genotypes across all cells.
+
+The scWGS data have been aligned against GRCh37 (to use the variable binning available with Ginkgo) and the scRNA-seq have been aligned against GRCh37 in an early attempt (not all mice are considered in that analysis) and against GRCh38 (later on, all cells are included).
+
+It is worth noting that despite removing all common variants from these sets, many mutations still remain. This is because we don't have a germline sample to remove germline variants and in all likelyhood the set of mutations is highly contaminated with germline variants. One possible workaraound is to only consider varints listed in COSMIC.
+
+
+```{r setup, message = FALSE, warning=FALSE}
+library(tidyverse)
+library(copynumber)
+library(VariantAnnotation)
+library(SingleCellExperiment)
+
+data("paper_palette")
+DT::datatable(NULL)
+
+```
+
+```{r}
+# knitr::opts_chunk$set(cache = TRUE, autodep = TRUE)
+```
+
+# Input
+
+```{r}
+meta_data.rna <- readxl::read_xlsx("data/annotations/key.scrna_pdx.xlsx")
+meta_data.dna <- readxl::read_xlsx("data/annotations/key.wgs_all.xlsx")
+```
+
+
+## scRNA on GRCh38
+
+Briefly the pipeline was: STAR, MarkDuplicates, Split'n'Trim (to process RNA-seq appropriately), BaseRecalibrator and monovar (see RDS-BLIC:LC/legion/virginia/4_genotyping_rna_seq/11_afonso). The VCF was then filtered to keep only entries with a PASS and not in any of GNOMAD, dbSNP144 and 1KG phase1. Following VEP annotation, only SNVs with a HIGH or MODERATE effect are kept.
+
+```{r}
+samples <- samples(scanVcfHeader("data-raw/rna.all.vepHM.vcf.gz"))
+samples <- sub(".recalibrated.bam", "", samples)
+samples <- sub("VT17b_", "VT17_", samples)
+
+if (length(setdiff(samples, meta_data.rna$cell_name)) > 0) {
+  warning("Some entries in the VCF are not in the meta-data.")
+}
+
+meta_data.rna %>%
+  filter(cell_name %in% samples) %>%
+  group_by(mouse, treatment, day) %>%
+  summarise(Libaries = paste(unique(Lib), collapse = ", "), n = n()) %>%
+  DT::datatable()
+```
+
+
+## scRNA on GRCh38, cosmic subset
+
+Briefly the pipeline was: STAR, MarkDuplicates, Split'n'Trim (to process RNA-seq appropriately), BaseRecalibrator and monovar (see RDS-BLIC:LC/legion/virginia/4_genotyping_rna_seq/11_afonso). The VCF was then filtered to keep only entries in COSMIC (to be completed)
+
+```{r}
+samples <- samples(scanVcfHeader("data-raw/rna.cosmic.vcf.gz"))
+samples <- sub(".recalibrated.bam", "", samples)
+samples <- sub("VT17b_", "VT17_", samples)
+
+if (length(setdiff(samples, meta_data.rna$cell_name)) > 0) {
+  warning("Some entries in the VCF are not in the meta-data.")
+}
+
+meta_data.rna %>%
+  filter(cell_name %in% samples) %>%
+  group_by(mouse, treatment, day) %>%
+  summarise(Libaries = paste(unique(Lib), collapse = ", "), n = n()) %>%
+  DT::datatable()
+```
+
+
+
+```{r}
+plot_af_comparison <- function(vcf.s1, vcf.s2, title = "",
+                               tag1 = "Day 0", tag2 = "Day 28",
+                               min.cells,
+                               min.perc.cells = 20,
+                               min.dp = 0,
+                               min.diff = 0.5,
+                               at.gene.level = F) {
+  if (min.dp > 0) {
+    geno(vcf.s1)[["GT"]][which(geno(vcf.s1)[["DP"]] < min.dp)] <- "low"
+    geno(vcf.s2)[["GT"]][which(geno(vcf.s2)[["DP"]] < min.dp)] <- "low"
+  }
+  if (at.gene.level) {
+    info.vcf.s1 <- as_tibble(info(vcf.s1), rownames = "snv") %>%
+      unnest(CSQ) %>%
+      mutate(gene = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][4]}),
+             effect = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][3]})) %>%
+      dplyr::select(-CSQ) %>%
+      filter(effect %in% c("HIGH", "MODERATE")) %>%
+      unique()
+    info.vcf.s2 <- as_tibble(info(vcf.s2), rownames = "snv") %>%
+      unnest(CSQ) %>%
+      mutate(gene = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][4]}),
+             effect = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][3]})) %>%
+      dplyr::select(-CSQ) %>%
+      filter(effect %in% c("HIGH", "MODERATE")) %>%
+      unique()
+    summary.s1 <- geno(vcf.s1)[["GT"]] %>%
+      as_tibble(rownames = "snv") %>%
+      pivot_longer(cols = -c("snv"), names_to = "cell", values_to = "genotype") %>%
+      left_join(info.vcf.s1, by = "snv") %>%
+      group_by(gene, cell) %>%
+      summarise(ref = sum(genotype %in% c("0/0")) > 0,
+                mutated = sum(genotype %in% c("0/1", "1/1")) > 0) %>%
+      mutate(ref = ifelse(mutated, F, ref)) %>%
+      group_by(gene) %>%
+      summarise(s1.REF = sum(ref), s1.ALT = sum(mutated))
+    summary.s2 <- geno(vcf.s2)[["GT"]] %>%
+      as_tibble(rownames = "snv") %>%
+      pivot_longer(cols = -c("snv"), names_to = "cell", values_to = "genotype") %>%
+      left_join(info.vcf.s2, by = "snv") %>%
+      group_by(gene, cell) %>%
+      summarise(ref = sum(genotype %in% c("0/0")) > 0,
+                mutated = sum(genotype %in% c("0/1", "1/1")) > 0) %>%
+      mutate(ref = ifelse(mutated, F, ref)) %>%
+      group_by(gene) %>%
+      summarise(s2.REF = sum(ref), s2.ALT = sum(mutated))
+    data <- summary.s1 %>% inner_join(summary.s2, by ="gene") %>%
+      mutate(s1.ALT.AF = s1.ALT / (s1.ALT + s1.REF),
+             s2.ALT.AF = s2.ALT / (s2.ALT + s2.REF),
+             s1.GC = s1.ALT + s1.REF,
+             s2.GC = s2.ALT + s2.REF,
+             GC = s1.ALT + s1.REF + s2.ALT + s2.REF,
+             min.GC = ifelse(s1.GC < s2.GC, s1.GC, s2.GC))
+  } else {
+    info.vcf.s1 <- as_tibble(info(vcf.s1), rownames = "snv") %>%
+      unnest(CSQ) %>%
+      mutate(gene = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][4]}),
+             effect = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][3]})) %>%
+      dplyr::select(-CSQ) %>%
+      filter(effect %in% c("HIGH", "MODERATE")) %>%
+      unique()
+    info.vcf.s2 <- as_tibble(info(vcf.s2), rownames = "snv") %>%
+      unnest(CSQ) %>%
+      mutate(gene = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][4]}),
+             effect = sapply(CSQ, function(x) {strsplit(x, "|", fixed = T)[[1]][3]})) %>%
+      dplyr::select(-CSQ) %>%
+      filter(effect %in% c("HIGH", "MODERATE")) %>%
+      unique()
+    summary.s1 <- t(apply(geno(vcf.s1)[["GT"]], 1,
+                          function(x) {
+                            c("s1.REF" = sum(x == "0/0"),
+                              "s1.ALT" = sum(x %in% c("0/1", "1/1")))
+                          })) %>%
+      as_tibble(rownames = "snv") %>%
+      filter(snv %in% info.vcf.s1$snv)
+    
+    summary.s2 <- t(apply(geno(vcf.s2)[["GT"]], 1,
+                          function(x) {
+                            c("s2.REF" = sum(x == "0/0"),
+                              "s2.ALT" = sum(x %in% c("0/1", "1/1")))
+                          })) %>%
+      as_tibble(rownames = "snv") %>%
+      filter(snv %in% info.vcf.s2$snv)
+    
+    data <-
+      summary.s1 %>% inner_join(summary.s2, by ="snv") %>%
+      mutate(s1.ALT.AF = s1.ALT / (s1.ALT + s1.REF),
+             s2.ALT.AF = s2.ALT / (s2.ALT + s2.REF),
+             s1.GC = s1.ALT + s1.REF,
+             s2.GC = s2.ALT + s2.REF,
+             GC = s1.ALT + s1.REF + s2.ALT + s2.REF,
+             min.GC = ifelse(s1.GC < s2.GC, s1.GC, s2.GC))
+    
+  }
+
+  if (missing(min.cells)) {
+    min.cells <- min.perc.cells /100 * (ncol(vcf.s1) + ncol(vcf.s2))
+  }
+
+  cat(paste("\nOut of", nrow(data), "SNVs, "))
+
+  data <- data %>%
+    filter(GC > min.cells) %>%
+    filter(s1.GC >= 5) %>%
+    filter(s2.GC >= 5)
+
+  cat(paste(nrow(data), "SNVs have enough depth in enough cells.\n\n"))
+
+  if (nrow(data) < 1) {
+    cat("", fill = T)
+    cat("No SNVs left!!", fill = T)
+    cat("", fill = T)
+
+    return(invisible(data))
+  }
+
+  
+  data.fisher <- data  %>%
+    filter(abs(s1.ALT.AF - s2.ALT.AF) >= min.diff)
+
+  cat(paste0("And ", nrow(data.fisher), " SNVs have a difference in AF >= ",
+            min.diff, ".\n\n"))
+  if (nrow(data.fisher) < 1) {
+    cat("", fill = T)
+    cat("No SNVs left!!", fill = T)
+    cat("", fill = T)
+  } else {
+    
+    ## Run Fisher test
+    data.fisher$p.value <- data.fisher %>%
+      dplyr::select(s1.REF, s1.ALT, s2.REF, s2.ALT) %>%
+      apply(1, function(x) {fisher.test(matrix(x, nrow = 2))$p.value})
+    data.fisher$q.value <- p.adjust(data.fisher$p.value, method = "BH")
+    
+    if (!at.gene.level) {
+      ## Add gene annotation from the VCF (source: VEP)
+      data.fisher <- data.fisher %>%
+        left_join(info(vcf.s1) %>%
+                    as_tibble(rownames = "snv") %>%
+                    dplyr::select(snv, CSQ), by = "snv") %>%
+        mutate(genes = sapply(CSQ, function(x) {
+          annotations = strsplit(x, split = "|", fixed = T)
+          genes_top<- paste(grep("--NULL--", unique(sapply(annotations, function(x) {
+            if (x[3] %in% c("HIGH", "MODERATE")) {
+              return(x[4])
+            } else {
+              return("--NULL--")
+            }
+          })), invert = T, value = T), collapse = ",")
+          
+          genes_all <- paste(grep("--NULL--", unique(sapply(annotations, function(x) {
+            if (x[3] %in% c("HIGH", "MODERATE", "MODIFIER")) {
+              return(x[4])
+            } else {
+              return("--NULL--")
+            }
+          })), invert = T, value = T), collapse = ",")
+    
+          return(ifelse(genes_top != "", genes_top, genes_all))
+        })) %>%
+        mutate(ensgenes = sapply(CSQ, function(x) {
+          annotations = strsplit(x, split = "|", fixed = T)
+          ensgenes_top <- paste(grep("--NULL--", unique(sapply(annotations, function(x) {
+            if (x[3] %in% c("HIGH", "MODERATE")) {
+              return(x[5])
+            } else {
+              return("--NULL--")
+            }
+          })), invert = T, value = T), collapse = ",")
+    
+          ensgenes_all <- paste(grep("--NULL--", unique(sapply(annotations, function(x) {
+            if (x[3] %in% c("HIGH", "MODERATE", "MODIFIER")) {
+              return(x[5])
+            } else {
+              return("--NULL--")
+            }
+          })), invert = T, value = T), collapse = ",")
+    
+          return(ifelse(ensgenes_top != "", ensgenes_top, ensgenes_all))
+          })) %>%
+        dplyr::select(-CSQ)
+
+      ## Add average expression data for S1 and S2
+      data.fisher <- data.fisher %>%
+        left_join(logcounts(sce.pdx) %>%
+                  as_tibble(rownames = "ensgene") %>%
+                  dplyr::select(ensgene, any_of(colnames(vcf.s1))) %>%
+                  mutate(s1.mean_logcounts = rowMeans(dplyr::select(., -1))) %>%
+                  dplyr::select(ensgene, s1.mean_logcounts),
+                by = c("ensgenes" = "ensgene")) %>%
+        left_join(logcounts(sce.pdx) %>%
+                  as_tibble(rownames = "ensgene") %>%
+                  dplyr::select(ensgene, any_of(colnames(vcf.s2))) %>%
+                  mutate(s2.mean_logcounts = rowMeans(dplyr::select(., -1))) %>%
+                  dplyr::select(ensgene, s2.mean_logcounts),
+                by = c("ensgenes" = "ensgene"))
+    }
+  }
+
+
+  g <- data  %>%
+    ggplot() +
+    geom_point(data = data.fisher %>% filter(q.value < 0.05),
+               aes(x = s1.ALT.AF, y = s2.ALT.AF), size = 2.5, col = "black", pch = 21) +
+    geom_point(data = data.fisher,
+               aes(x = s1.ALT.AF, y = s2.ALT.AF, col = q.value)) +
+    geom_abline(slope = 1, intercept = c(-min.diff, min.diff), col = "grey") +
+    scale_color_gradientn(name = "FDR-adj\np-value",
+                          limits = c(0, 1),
+                          breaks = c(0.05, 0.5, 1),
+                          colors = c("red",
+                                     "red",
+                                     scales::col2hcl("#56B1F7", c = 50),
+                                     "#132B43"),
+                          values = c(0, 0.05, 0.0500001, 1),
+                          trans = "log1p") +
+    labs(main = title,
+         subtitle = paste(ncol(vcf.s1), "cells in", tag1, "+",
+                          ncol(vcf.s2), "cells in", tag2),
+         x = paste(tag1, "allele freq."),
+         y = paste(tag2, "allele freq.")) +
+    coord_fixed(xlim = c(0, 1), ylim = c(0, 1)) +
+    theme_bw() +
+    theme(axis.text = element_text(size = 9),
+          legend.text = element_text(size = 9))
+  print(g)
+
+  data.sig <- data.fisher %>%
+    filter(q.value < 0.05)
+  print(htmltools::tagList(DT::datatable(data.sig)))
+
+  data <- data %>% left_join(data.fisher)
+  return(invisible(data))
+}
+```
+
+
+# COSMIC SNVs on GRCh38
+
+The aim of this analysis is to detect any possible variant that could be enriched among treated cells, indicating that such variant might be relevant for resistance.
+
+```{r}
+rna.vcf <- readVcf("data-raw/rna.cosmic.vcf.gz")
+colnames(rna.vcf) <- sub(".recalibrated.bam", "", colnames(rna.vcf))
+colnames(rna.vcf) <- sub("VT17b_", "VT17_", colnames(rna.vcf))
+
+pdx_sce_filename <- "data/PDX_paperReady_hand_Lineage_Mouse_Quiescence18122018.RDS"
+sce.pdx <- readRDS(pdx_sce_filename)
+colnames(sce.pdx) <- sce.pdx$originalNames
+colnames(sce.pdx) <- sub("VT17b_", "VT17_", colnames(sce.pdx))
+
+cells <- intersect(colnames(sce.pdx), colnames(rna.vcf))
+rna.vcf <- rna.vcf[, cells]
+```
+
+
+
+## Paired treated mice
+
+This analysis is done on paired treated mice, were we can track the possible enrichment of a particular SNV in the day 28 vs day 0 cells.
+
+### At the SNV level
+
+This is the standard analysis, where we look at all COSMIC SNV found among these cells.
+
+```{r, results = "asis"}
+library(openxlsx)
+
+style.grey_bckgnd <- createStyle(bgFill = "#DDDDDD")
+style.bold <- createStyle(textDecoration = "bold")
+style.line <- createStyle(border = "bottom")
+
+mice <- meta_data.rna %>% group_by(treatment, mouse, day) %>% summarise(n = n()) %>%
+  group_by(treatment, mouse) %>% summarise(n.days = n()) %>%
+  filter(treatment == "chemo" & n.days == 2) %>% pull(mouse)
+
+cells.s1 <- meta_data.rna %>% filter(mouse %in% mice, day == "d0") %>% pull(cell_name)
+cells.s1 <- intersect(cells.s1, colnames(rna.vcf))
+vcf.s1 <- rna.vcf[, cells.s1]
+
+cells.s2 <- meta_data.rna %>% filter(mouse %in% mice, day == "d28") %>% pull(cell_name)
+cells.s2 <- intersect(cells.s2, colnames(rna.vcf))
+vcf.s2 <- rna.vcf[, cells.s2]
+plot_af_comparison(vcf.s1, vcf.s2,
+                   paste("All treated mice"),
+                   tag1 = "Day 0",
+                   tag2 = "Day 28",
+                   min.dp = 10,
+                   min.diff = 0,
+                   min.perc.cells = 10)
+
+pdf("output/figures/Fig6E.AFs_of_SNVs_in_PDX_scRNAseq.pdf", width = 4.1, height = 3.6)
+data <- plot_af_comparison(vcf.s1, vcf.s2,
+                   paste("All treated mice"),
+                   tag1 = "Day 0",
+                   tag2 = "Day 28",
+                   min.dp = 10,
+                   min.diff = 0,
+                   min.perc.cells = 10)
+dev.off()
+
+wb <- openxlsx::createWorkbook()
+
+ws_name <- "Fig6E AFs of SNVs in PDX scRNA"
+ws <- addWorksheet(wb, ws_name)
+
+writeDataTable(wb, sheet = ws, x = data,
+               rowNames = F, tableStyle = "none", withFilter = F)
+setColWidths(wb, ws, cols = 1:ncol(data), widths = "auto")
+addStyle(wb, ws, rows = 1, cols = 1:ncol(data), style = style.bold)
+addStyle(wb, ws, rows = 1:nrow(data) + 1, cols = 1, style = style.bold)
+# conditionalFormatting(wb, ws, rows = 1:nrow(data) + 1, cols = 2:11, rule = "AND($P2 == 0, $Q2 == 0)", style = style.grey_bckgnd)
+# conditionalFormatting(wb, ws, rows = 1:nrow(data) + 1, cols = 2:ncol(data), rule = "AND($M2 > 0, $M2 < 0.05)", style = style.bold)
+```
+
+
+### At the gene level
+
+In case more than one mutation on the same gene might confer resistance, we repeat this analysis at the gene level.
+
+
+```{r, results = "asis"}
+cells.s1 <- meta_data.rna %>% filter(mouse %in% mice, day == "d0") %>% pull(cell_name)
+cells.s1 <- intersect(cells.s1, colnames(rna.vcf))
+vcf.s1 <- rna.vcf[, cells.s1]
+
+cells.s2 <- meta_data.rna %>% filter(mouse %in% mice, day == "d28") %>% pull(cell_name)
+cells.s2 <- intersect(cells.s2, colnames(rna.vcf))
+vcf.s2 <- rna.vcf[, cells.s2]
+plot_af_comparison(vcf.s1, vcf.s2,
+                   paste("All treated mice"),
+                   tag1 = "Day 0",
+                   tag2 = "Day 28",
+                   min.dp = 10,
+                   min.diff = 0,
+                   min.perc.cells = 10,
+                   at.gene.level = T)
+
+pdf("output/figures/Fig6F.AFs_of_SNVs_collated_at_gene_level_in_PDX_scRNAseq.pdf", width = 4.1, height = 3.6)
+data <- plot_af_comparison(vcf.s1, vcf.s2,
+                   paste("All treated mice"),
+                   tag1 = "Day 0",
+                   tag2 = "Day 28",
+                   min.dp = 10,
+                   min.diff = 0,
+                   min.perc.cells = 10,
+                   at.gene.level = T)
+dev.off()
+
+ws_name <- "Fig6F AFs of gene in PDX scRNA"
+ws <- addWorksheet(wb, ws_name)
+
+writeDataTable(wb, sheet = ws, x = data,
+               rowNames = F, tableStyle = "none", withFilter = F)
+setColWidths(wb, ws, cols = 1:ncol(data), widths = "auto")
+addStyle(wb, ws, rows = 1, cols = 1:ncol(data), style = style.bold)
+addStyle(wb, ws, rows = 1:nrow(data) + 1, cols = 1, style = style.bold)
+# conditionalFormatting(wb, ws, rows = 1:nrow(data) + 1, cols = 2:11, rule = "$M2 == 0", style = style.grey_bckgnd)
+# conditionalFormatting(wb, ws, rows = 1:nrow(data) + 1, cols = 2:ncol(data), rule = "AND($M2 > 0, $M2 < 0.05)", style = style.bold)
+
+openxlsx::saveWorkbook(wb, "output/scRNAseq_data_Fig6EF.xlsx", overwrite = TRUE)
+```
+

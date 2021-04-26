@@ -1,0 +1,719 @@
+---
+title: "Seurat"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+# Introduction
+
+*This script was originally written by Chela James*
+
+In addition to the analysis of the scRNA-seq with Seurat (to buil a UMAP and find marker genes for each cluster), we also integrate here data from the [bulk RNA-seq analysis](bulk-deseq2.html) to flag or remove genes involved in acute response. Those are the ones differentially expressed between actutely treated and untreated (in headache experiment) but not differentially expressed between chronically treated and untreated (also in the headache experiment).
+
+```{r setup, include=FALSE}
+library(Seurat)
+library(scater)
+library(tidyverse)
+library(patchwork)
+library(DT)
+```
+
+```{r}
+# knitr::opts_chunk$set(cache = TRUE, autodep = TRUE)
+```
+
+```{r eval = FALSE}
+# get mito genes
+
+data("t2g.e84")
+
+pdx_sce_filename<-"data/FinalPaper_SingleCellExperiment_PDX.23072018.RDS"
+
+sce<-readRDS(pdx_sce_filename)
+
+row_df <- data.frame(rowData(sce))
+
+row_df <- rownames_to_column(row_df,"ens_gene")  %>%
+  left_join(t2g.e84 %>% dplyr::select(ens_gene, ext_gene) %>% unique(), by = c("ens_gene")) %>%
+  dplyr::mutate(ext_gene = ifelse(is.na(ext_gene), ens_gene, ext_gene)) %>% dplyr::rename("gene_short_name" = "ext_gene")
+
+my_counts <- counts(sce)
+rownames(my_counts) <- row_df$gene_short_name
+
+seu <- CreateSeuratObject(my_counts, project = "virginia")
+
+seu[["percent.mt"]] <- PercentageFeatureSet(seu, pattern = "^MT")
+
+seu@meta.data$group <- sce$group
+
+VlnPlot(seu, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+plot1 <- FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+CombinePlots(plots = list(plot1, plot2))
+
+seu <- NormalizeData(seu)
+
+seu <- FindVariableFeatures(seu, selection.method = "vst", nfeatures = 2000)
+top10 <- head(VariableFeatures(seu), 10)
+
+plot1 <- VariableFeaturePlot(seu)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+CombinePlots(plots = list(plot1, plot2))
+
+
+all.genes <- rownames(seu)
+seu <- ScaleData(seu, features = all.genes)
+
+seu <- RunPCA(seu, features = VariableFeatures(object = seu))
+DimPlot(seu, reduction = "pca")
+
+DimHeatmap(seu, dims = 1, cells = 500, balanced = TRUE)
+
+seu <- JackStraw(seu, num.replicate = 100)
+seu <- ScoreJackStraw(seu, dims = 1:20)
+JackStrawPlot(seu, dims = 1:20)
+ElbowPlot(seu)
+
+
+seu <- FindNeighbors(seu, dims = 1:10)
+seu <- FindClusters(seu, resolution = 0.5)
+head(Idents(seu), 5)
+
+
+seu <- RunUMAP(seu, dims = 1:10)
+
+usethis::use_directory("output")
+saveRDS(seu, file = paste0("output/seu_object_cj_12_09_19.rds"))
+```
+
+# UMAP clustering
+
+This is the UMAP as saved by Chela. While the UMAP function in Seurat should be reproducible, the result with the same seed returns a slightly different UMAP. We therefore stick to Chela's version, saved in the `seu_object_cj_12_09_19.rds` file.
+
+```{r}
+# load('output/seu_object_cj_12_09_19.rda')
+seu <- readRDS('output/seu_object_cj_12_09_19.rds')
+
+
+DimPlot(seu, reduction = "umap", shape.by = "group") +
+  scale_shape_discrete(name = "Group", labels = c("Treated", "Untreated")) +
+  scale_color_discrete(name = "Cluster") +
+  guides(color = guide_legend(override.aes = list(shape = 15), ncol = 2)) +
+  theme(legend.position = c(0.95, 0.05),
+        legend.justification = c(1, 0),
+        legend.key.size = unit(3, "mm"),
+        # legend.box = "vertical",
+        # legend.direction = "horizontal",
+        legend.box = "horizontal",
+        legend.direction = "vertical",
+        legend.text = element_text(size = 6),
+        legend.title = element_text(size = 7),
+        legend.spacing = unit(3, "mm"),
+        legend.box.background = element_rect(fill = NA, color = "black", size = 0.3),
+        legend.box.margin = margin(3,3,3,3),
+        text = element_text(size = 8),
+        axis.text = element_text(size = 8))
+
+ggsave("output/figures/FigS7A_umap.pdf", device = "pdf",
+       width = 3.2, height = 3.2)
+
+excel_data <- Embeddings(seu[["umap"]]) %>%
+  cbind(Group = seu$group) %>%
+  as_tibble(rownames = "Cell") %>%
+  mutate(Group = ifelse(Group == "Chemotherapy", "Treated", Group))
+
+wb <- openxlsx::createWorkbook()
+ws_name <- "FigS7A umap"
+ws <- openxlsx::addWorksheet(wb, ws_name)
+
+openxlsx::writeDataTable(wb, sheet = ws, x = excel_data,
+               rowNames = F, tableStyle = "none", withFilter = F)
+openxlsx::setColWidths(wb, ws, cols = 1:ncol(excel_data), widths = "auto")
+openxlsx::addStyle(wb, ws, rows = 1, cols = 1:ncol(excel_data), style = openxlsx::createStyle(textDecoration = "bold"))
+openxlsx::saveWorkbook(wb, "output/scRNAseq_data_FigS7A_umap.xlsx", overwrite = TRUE)
+```
+
+```{r}
+DimPlot(seu, reduction = 'umap', group.by = "group")
+```
+
+```{r}
+# seu.markers <- FindAllMarkers(seu,  only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+# save(seu.markers, file ="output/seu_markers.RData")
+
+load("output/seu_markers.RData")
+```
+
+## Markers for cluster 0
+
+```{r}
+cluster0.markers <- seu.markers %>%
+  filter(cluster == 0) %>%
+  dplyr::select(-c(cluster, gene)) %>%
+  arrange(desc(avg_logFC)) %>%
+  rownames_to_column("gene")
+
+datatable(
+  cluster0.markers, extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+  )
+) %>% DT::formatSignif(columns=c('p_val', 'avg_logFC', 'p_val_adj'), digits=3)
+```
+
+## Markers for cluster 1
+
+```{r}
+cluster1.markers <- seu.markers %>%
+  filter(cluster == 1) %>%
+  dplyr::select(-c(cluster, gene)) %>%
+  arrange(desc(avg_logFC)) %>%
+  rownames_to_column("gene")
+
+datatable(
+  cluster0.markers, extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+  )
+) %>% DT::formatSignif(columns=c('p_val', 'avg_logFC', 'p_val_adj'), digits=3)
+```
+
+## Markers for cluster 2
+
+```{r}
+cluster2.markers <- seu.markers %>%
+  filter(cluster == 2) %>%
+  dplyr::select(-c(cluster, gene)) %>%
+  arrange(desc(avg_logFC)) %>%
+  rownames_to_column("gene")
+
+datatable(
+  cluster0.markers, extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+  )
+) %>% DT::formatSignif(columns=c('p_val', 'avg_logFC', 'p_val_adj'), digits=3)
+```
+
+## Markers for cluster 3
+
+```{r}
+cluster3.markers <- seu.markers %>%
+  filter(cluster == 3) %>%
+  dplyr::select(-c(cluster, gene)) %>%
+  arrange(desc(avg_logFC)) %>%
+  rownames_to_column("gene")
+
+datatable(
+  cluster0.markers, extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+  )
+) %>% DT::formatSignif(columns=c('p_val', 'avg_logFC', 'p_val_adj'), digits=3)
+```
+
+## All markers table
+
+```{r markers_table}
+nrows <- max(nrow(cluster0.markers), nrow(cluster1.markers),
+             nrow(cluster2.markers), nrow(cluster3.markers))
+all_markers_table <- tibble(
+  `cluster 0` = rep("", nrows),
+  `cluster 1` = rep("", nrows),
+  `cluster 2` = rep("", nrows),
+  `cluster 3` = rep("", nrows))
+all_markers_table[1:nrow(cluster0.markers), "cluster 0"] <- cluster0.markers$gene
+all_markers_table[1:nrow(cluster1.markers), "cluster 1"] <- cluster1.markers$gene
+all_markers_table[1:nrow(cluster2.markers), "cluster 2"] <- cluster2.markers$gene
+all_markers_table[1:nrow(cluster3.markers), "cluster 3"] <- cluster3.markers$gene
+
+WriteXLS::WriteXLS(all_markers_table,
+                   ExcelFileName = "docs/seurat.xlsx",
+                   SheetNames = "Seurat cluster markers")
+```
+
+Table in Excel format available here: [seurat.xlsx](seurat.xlsx).
+
+
+
+# FeaturePlots
+
+```{r}
+deseq2.res.acute <- readRDS("output/deseq2-bulk_dds.mss-PT2278_nochem_chem-vs-PT2278_nochem_nochem.rds")
+deseq2.res.chronic <- readRDS("output/deseq2-bulk_dds.mss-PT2278_chem_chem-vs-PT2278_nochem_nochem.rds")
+
+deseq2.res.acute_only <- deseq2.res.acute %>%
+  filter(sign(log2FoldChange) > 0) %>%
+  anti_join(deseq2.res.chronic %>%
+              filter(sign(log2FoldChange) > 0),
+            by = c("ensgene")) %>%
+  rbind(deseq2.res.acute %>%
+          filter(sign(log2FoldChange) < 0) %>%
+          anti_join(deseq2.res.chronic %>%
+                      filter(sign(log2FoldChange) < 0),
+                    by = c("ensgene")))
+```
+
+## Original set of Feature plots
+
+### Cluster 0
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = cluster0.markers$gene[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster 1
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = cluster1.markers$gene[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster 2
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = cluster2.markers$gene[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster 3
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = cluster3.markers$gene[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster mix (as in mss)
+
+```{r, fig.height=10}
+FeaturePlot(seu, ncol = 2,
+            features = c(
+              cluster0.markers$gene[1:2],
+              cluster1.markers$gene[1:2],
+              cluster2.markers$gene[1:2],
+              cluster3.markers$gene[1:2]),
+            pt.size = 1,
+            min.cutoff = "q10",
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+## Feature plots after removing genes specific to acute response
+
+### Cluster 0
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = setdiff(cluster0.markers$gene,
+                               deseq2.res.acute_only$symbol)[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster 1
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = setdiff(cluster1.markers$gene,
+                               deseq2.res.acute_only$symbol)[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster 2
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = setdiff(cluster2.markers$gene,
+                               deseq2.res.acute_only$symbol)[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster 3
+
+```{r, fig.height=7}
+FeaturePlot(seu, ncol = 2,
+            features = setdiff(cluster3.markers$gene,
+                               deseq2.res.acute_only$symbol)[1:6],
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+```
+
+### Cluster mix (as in mss)
+
+```{r, fig.height=10}
+these_genes <- c(setdiff(cluster0.markers$gene,
+                         deseq2.res.acute_only$symbol)[1:2],
+                 setdiff(cluster1.markers$gene,
+                         deseq2.res.acute_only$symbol)[1:2],
+                 setdiff(cluster2.markers$gene,
+                         deseq2.res.acute_only$symbol)[1:2],
+                 setdiff(cluster3.markers$gene,
+                         deseq2.res.acute_only$symbol)[1:2])
+FeaturePlot(seu, ncol = 2,
+            features = these_genes,
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"))
+
+plot_list <- FeaturePlot(seu, ncol = 2,
+            features = these_genes,
+            pt.size = 0.2,
+            order = TRUE,
+            cols = c("lightgrey", "blue", "darkblue"),
+            combine = F)
+plot_list <- lapply(plot_list, function(plot) {
+  plot <- plot +
+    labs(x = NULL, y = NULL, color = "LogNormalized expression") +
+    theme(text = element_text(size = 9),
+          axis.text = element_text(size = 9),
+          plot.margin = margin(2,5,2,5),
+          plot.title = element_text(vjust = -1, face = "plain")) +
+    coord_cartesian(clip = "off")
+  })
+plot_list[[1]] <- plot_list[[1]] + labs(y = "CLUSTER-0") +
+  theme(axis.title.y = element_text(colour = scales::hue_pal()(4)[1],
+                                    face = "bold"))
+plot_list[[3]] <- plot_list[[3]] + labs(y = "CLUSTER-1") +
+  theme(axis.title.y = element_text(colour = scales::hue_pal()(4)[2],
+                                    face = "bold"))
+plot_list[[5]] <- plot_list[[5]] + labs(y = "CLUSTER-2") +
+  theme(axis.title.y = element_text(colour = scales::hue_pal()(4)[3],
+                                    face = "bold"))
+plot_list[[7]] <- plot_list[[7]] + labs(y = "CLUSTER-3") +
+  theme(axis.title.y = element_text(colour = scales::hue_pal()(4)[4],
+                                    face = "bold"))
+
+pp <- (plot_list[[1]] + plot_list[[2]]) /
+  (plot_list[[3]] + plot_list[[4]]) /
+  (plot_list[[5]] + plot_list[[6]]) /
+  (plot_list[[7]] + plot_list[[8]]) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom',
+        legend.title = element_text(size = 9, vjust = 1),
+        legend.key.height = unit(2, "mm"),
+        legend.key.width = unit(4, "mm"),
+        legend.justification = c(0, 0))
+ggsave(plot = pp, "output/figures/FigS7C_umap_gene_expression.pdf",
+       device = "pdf", width = 3.2, height = 4.5)
+
+
+excel_data <- Embeddings(seu[["umap"]]) %>%
+  cbind(Group = seu$group) %>%
+  cbind(Cluster = as.numeric(seu$seurat_clusters) - 1) %>%
+  as_tibble(rownames = "Cell") %>%
+  mutate(Group = ifelse(Group == "Chemotherapy", "Treated", Group)) %>%
+  left_join(as_tibble(t(seu$RNA@data[these_genes, ]), rownames = "Cell"),
+            by = "Cell")
+
+wb <- openxlsx::createWorkbook()
+ws_name <- "FigS7C LogNorm expression"
+ws <- openxlsx::addWorksheet(wb, ws_name)
+
+openxlsx::writeDataTable(wb, sheet = ws, x = excel_data,
+               rowNames = F, tableStyle = "none", withFilter = F)
+openxlsx::setColWidths(wb, ws, cols = 1:ncol(excel_data), widths = "auto")
+openxlsx::addStyle(wb, ws, rows = 1, cols = 1:ncol(excel_data), style = openxlsx::createStyle(textDecoration = "bold"))
+openxlsx::addStyle(wb, ws, rows = 0:nrow(excel_data) + 1, cols = 1, style = openxlsx::createStyle(textDecoration = "bold"))
+openxlsx::saveWorkbook(wb, "output/scRNAseq_data_FigS7C_logNorm_expression.xlsx", overwrite = TRUE)
+
+```
+
+# Heatmaps
+
+## heatmap top 50s
+
+Original heatmap as in Feb submission
+
+```{r, fig.width=12,fig.height=22}
+#seu.markers <- FindAllMarkers(seu,  only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+#save(seu.markers, file ="output/seu_markers.RData")
+
+load("output/seu_markers.RData")
+top50 <- seu.markers %>% group_by(cluster) %>% top_n(n = 50, wt = avg_logFC) %>% arrange(cluster, desc(avg_logFC))
+DoHeatmap(seu, features = top50$gene) + NoLegend()
+```
+
+Splitting gene names
+
+```{r, fig.width=8,fig.height=14}
+top50 <- seu.markers %>%
+  group_by(cluster) %>%
+  top_n(n = 50, wt = avg_logFC)
+
+cols = scales::hue_pal()(4)
+names(cols) <- c("0", "1", "2", "3")
+top_annotation <- ComplexHeatmap::HeatmapAnnotation(
+  Cluster = seu$seurat_clusters,
+  col = list(Cluster = cols),
+  annotation_name_gp = grid::gpar(fontsize = 0),
+  simple_anno_size = unit(0.7, "cm"),
+  show_legend = F
+  )
+
+odd_ones <- c(1:length(top50$gene))[(1:length(top50$gene)) %% 2 == 1]
+even_ones <- c(1:length(top50$gene))[(1:length(top50$gene)) %% 2 == 0]
+names_1 = ComplexHeatmap::rowAnnotation(
+  foo = ComplexHeatmap::anno_mark(at = odd_ones,
+                                  labels = top50$gene[odd_ones],
+                                  side = "right"),
+  annotation_name_gp = grid::gpar(fontsize = 12)
+  )
+names_2 = ComplexHeatmap::rowAnnotation(
+  foo = ComplexHeatmap::anno_mark(at = even_ones,
+                                  labels = top50$gene[even_ones],
+                                  side = "left"),
+  annotation_name_gp = grid::gpar(fontsize = 12)
+  )
+
+p <- ComplexHeatmap::Heatmap(seu$RNA@scale.data[top50$gene, ],
+                             col = circlize::colorRamp2(c(-2, 0, 2), c("purple", "black", "yellow")),
+                             name = "vst",
+                             show_row_names = FALSE,
+                             show_column_names = FALSE,
+                             column_title_gp = grid::gpar(fontsize = 14),
+                             row_title = NULL,
+                             cluster_columns = FALSE,
+                             column_split = as.character(seu$seurat_clusters),
+                             cluster_rows = FALSE,
+                             row_split = top50$cluster,
+                             top_annotation = top_annotation,
+                             show_heatmap_legend = F,
+                             right_annotation = names_1,
+                             left_annotation = names_2
+                             )
+print(p)
+
+pdf("output/figures/FigS7B_heatmap_all_genes.pdf", width = 8, height = 14)
+print(p)
+dev.off()
+
+excel_data <- cbind(gene_cluster = top50$cluster,
+                    gene = top50$gene,
+                    seu$RNA@scale.data[top50$gene, ])
+excel_data <- rbind(cell_cluster = c(gene_cluster = NA,
+                                     gene = NA,
+                                     seu$seurat_clusters),
+                    excel_data)
+
+wb <- openxlsx::createWorkbook()
+ws_name <- "FigS7B heatmap"
+ws <- openxlsx::addWorksheet(wb, ws_name)
+
+openxlsx::writeDataTable(wb, sheet = ws, x = as.data.frame(excel_data),
+               rowNames = F, tableStyle = "none", withFilter = F)
+openxlsx::setColWidths(wb, ws, cols = 1:ncol(excel_data), widths = "auto")
+openxlsx::addStyle(wb, ws, rows = 1, cols = 1:ncol(excel_data), style = openxlsx::createStyle(textDecoration = "bold"))
+openxlsx::saveWorkbook(wb, "output/scRNAseq_data_FigS7B_heatmap.xlsx", overwrite = TRUE)
+```
+
+## heatmap top 50s tagging genes specific to acute response
+
+Tags on the right side mark the genes that are differentially expressed between actutely treated and untreated, between chronically treated and untreated and only in the first set.
+
+```{r, fig.width=12,fig.height=22}
+top50 <- seu.markers %>%
+  group_by(cluster) %>%
+  top_n(n = 50, wt = avg_logFC)
+
+cols = scales::hue_pal()(4)
+names(cols) <- c("0", "1", "2", "3")
+top_annotation <- ComplexHeatmap::HeatmapAnnotation(
+  Cluster = seu$seurat_clusters,
+  col = list(Cluster = cols),
+  annotation_name_gp = grid::gpar(fontsize = 0),
+  simple_anno_size = unit(0.7, "cm"),
+  show_legend = F
+  )
+
+row_annotation <- ComplexHeatmap::rowAnnotation(
+  acute = top50$gene %in% deseq2.res.acute$symbol,
+  chronic = top50$gene %in% deseq2.res.chronic$symbol,
+  acute_only = top50$gene %in% deseq2.res.acute_only$symbol,
+  col = list(
+    acute = c("TRUE" = "black", "FALSE" = "white"),
+    chronic = c("TRUE" = "black", "FALSE" = "white"),
+    acute_only = c("TRUE" = "black", "FALSE" = "white")
+  )
+)
+p <- ComplexHeatmap::Heatmap(seu$RNA@scale.data[top50$gene, ],
+                             col = circlize::colorRamp2(c(-2, 0, 2), c("purple", "black", "yellow")),
+                             name = "vst",
+                             row_names_side = "left",
+                             row_names_gp = grid::gpar(fontsize = 10),
+                             show_column_names = FALSE,
+                             column_title_gp = grid::gpar(fontsize = 14),
+                             row_title = NULL,
+                             cluster_columns = FALSE,
+                             column_split = as.character(seu$seurat_clusters),
+                             cluster_rows = FALSE,
+                             row_split = top50$cluster,
+                             top_annotation = top_annotation,
+                             show_heatmap_legend = F,
+                             right_annotation = row_annotation
+                             )
+print(p)
+```
+
+
+## heatmap top 50s tagging genes specific to acute response
+
+Mark in red the genes in cluster 1 (mostly comprised of chemotherapy-treated cells) that are differentially expressed in the actutely treated samples but not in the chronically treated samles
+
+```{r, fig.width=12,fig.height=22}
+top50 <- seu.markers %>%
+  group_by(cluster) %>%
+  top_n(n = 50, wt = avg_logFC)
+
+cols = scales::hue_pal()(4)
+names(cols) <- c("0", "1", "2", "3")
+top_annotation <- ComplexHeatmap::HeatmapAnnotation(
+  Cluster = seu$seurat_clusters,
+  col = list(Cluster = cols),
+  annotation_name_gp = grid::gpar(fontsize = 0),
+  simple_anno_size = unit(0.7, "cm"),
+  show_legend = F
+  )
+
+odd_ones <- c(1:length(top50$gene))[(1:length(top50$gene)) %% 2 == 1]
+even_ones <- c(1:length(top50$gene))[(1:length(top50$gene)) %% 2 == 0]
+names_1 = ComplexHeatmap::rowAnnotation(
+  foo = ComplexHeatmap::anno_mark(at = odd_ones,
+                                  labels = top50$gene[odd_ones],
+                                  side = "right",
+                                  labels_gp = grid::gpar(col = ifelse(
+                                    (top50$gene[odd_ones] %in% deseq2.res.acute_only$symbol) & (top50$cluster[odd_ones] == 1),
+                                    "red", "black"))),
+  annotation_name_gp = grid::gpar(fontsize = 16)
+  )
+names_2 = ComplexHeatmap::rowAnnotation(
+  foo = ComplexHeatmap::anno_mark(at = even_ones,
+                                  labels = top50$gene[even_ones],
+                                  side = "left",
+                                  labels_gp = grid::gpar(col = ifelse(
+                                    (top50$gene[even_ones] %in% deseq2.res.acute_only$symbol) & (top50$cluster[even_ones] == 1),
+                                    "red", "black"))),
+  annotation_name_gp = grid::gpar(fontsize = 16)
+  )
+
+p <- ComplexHeatmap::Heatmap(seu$RNA@scale.data[top50$gene, ],
+                             col = circlize::colorRamp2(c(-2, 0, 2), c("purple", "black", "yellow")),
+                             name = "vst",
+                             show_row_names = FALSE,
+                             show_column_names = FALSE,
+                             column_title_gp = grid::gpar(fontsize = 14),
+                             row_title = NULL,
+                             cluster_columns = FALSE,
+                             column_split = as.character(seu$seurat_clusters),
+                             cluster_rows = FALSE,
+                             row_split = top50$cluster,
+                             top_annotation = top_annotation,
+                             show_heatmap_legend = F,
+                             right_annotation = names_1,
+                             left_annotation = names_2
+                             )
+print(p)
+```
+
+
+## heatmap top 50s removing genes specific to acute response
+
+```{r, fig.width=12,fig.height=22}
+top50 <- seu.markers %>%
+  filter(!(gene %in% deseq2.res.acute_only$symbol)) %>%
+  group_by(cluster) %>%
+  top_n(n = 50, wt = avg_logFC)
+
+cols = scales::hue_pal()(4)
+names(cols) <- c("0", "1", "2", "3")
+top_annotation <- ComplexHeatmap::HeatmapAnnotation(
+  Cluster = seu$seurat_clusters,
+  col = list(Cluster = cols),
+  annotation_name_gp = grid::gpar(fontsize = 0),
+  simple_anno_size = unit(0.7, "cm"),
+  show_legend = F
+  )
+
+odd_ones <- c(1:length(top50$gene))[(1:length(top50$gene)) %% 2 == 1]
+even_ones <- c(1:length(top50$gene))[(1:length(top50$gene)) %% 2 == 0]
+names_1 = ComplexHeatmap::rowAnnotation(
+  foo = ComplexHeatmap::anno_mark(at = odd_ones, labels = top50$gene[odd_ones], side = "right"),
+  annotation_name_gp = grid::gpar(fontsize = 16)
+  )
+names_2 = ComplexHeatmap::rowAnnotation(
+  foo = ComplexHeatmap::anno_mark(at = even_ones, labels = top50$gene[even_ones], side = "left"),
+  annotation_name_gp = grid::gpar(fontsize = 16)
+  )
+
+p <- ComplexHeatmap::Heatmap(seu$RNA@scale.data[top50$gene, ],
+                             col = circlize::colorRamp2(c(-2, 0, 2), c("purple", "black", "yellow")),
+                             name = "vst",
+                             show_row_names = FALSE,
+                             show_column_names = FALSE,
+                             column_title_gp = grid::gpar(fontsize = 14),
+                             row_title = NULL,
+                             cluster_columns = FALSE,
+                             column_split = as.character(seu$seurat_clusters),
+                             cluster_rows = FALSE,
+                             row_split = top50$cluster,
+                             top_annotation = top_annotation,
+                             show_heatmap_legend = F,
+                             right_annotation = names_1,
+                             left_annotation = names_2
+                             )
+print(p)
+```
+
+# Differential gene expression
+
+## Cluster 1 v 0,2 and 3
+
+```{r}
+library(MAST)
+library(DT)
+
+cluster_1_v_other_clusters <- FindMarkers(seu, ident.1 = 1, ident.2 = c(0,2,3) , test.use = "MAST")
+
+datatable(cluster_1_v_other_clusters,  extensions = 'Buttons', options = list (dom = 'Bfrtip', buttons = c('copy', 'csv', 'excel')))
+
+```
+
+## Heatmap (top50 ordered by pval_adj) group 1 using differential gene expression
+
+```{r, fig.height=12,fig.width=8}
+library(pheatmap)
+my_hm <- DoHeatmap(seu, features = rownames(cluster_1_v_other_clusters)[1:50])
+my_hm <- my_hm$data
+my_hm <- my_hm[!is.na(my_hm$Expression),]
+my_hm <- spread(my_hm, Feature, Expression)
+my_colnames <- colnames(my_hm)[3:length(colnames(my_hm))]
+my_hm <- left_join(my_hm, rownames_to_column(seu@meta.data,"Cell"), by = "Cell") %>% 
+  dplyr::select(Cell,seurat_clusters,group,my_colnames)
+rownames(my_hm) <- my_hm$Cell
+my_anno <- my_hm[,1:3]
+my_anno$Cell <- NULL
+my_hm <- my_hm[,-c(1:3)]
+
+pheatmap(t(my_hm), annotation = my_anno,show_colnames = FALSE)
+```
+
+
+## Violin plots of high confidence PRS markers
+
+
+```{r}
+VlnPlot(seu, features = c("KCNN3", "CPB2-AS1", "MTRNR2L3", "OSER1-AS1", "H3F3B", "KCNK6", "RP11-468E2.4", "MT-ATP8", "MT-RNR2"))
+
+```
+

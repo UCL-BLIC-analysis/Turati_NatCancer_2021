@@ -1,0 +1,785 @@
+---
+title: "Resistance signature"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+---
+
+# Introduction
+
+The aim is to define a signature of Treated and PRS cells from the PDX data and map that signature on the primary cells. We are interested in seeing if that signature is stronger in MRD cells.
+
+Originally, the analysis was performed by Afonso using SCDE to call differentially expressed genes and derive a signature from that list.
+
+We later switched to using the SingleR package (only available on more recent versions of R).
+
+
+```{r setup, include=FALSE}
+library(Seurat)
+library(scater)
+library(scde)
+library(tidyverse)
+library(DT)
+library(fgsea)
+library(topGO)
+source("code/genetricSignatureHelper.R")
+data("paper_palette")
+data("signatures")
+```
+
+```{r}
+# knitr::opts_chunk$set(cache = TRUE, autodep = TRUE)
+```
+
+# Input
+
+We read the data from the pre-compiled SCE object. The PRS are defined as the untreated cells in TSCAN groups 6, 7 and 9 (accounting for 26 cells).
+
+The gene names are taken from Ensembl 84.
+
+For this analysis we remove both cycling cells and genes involved in cell cycle. The former is done by using the `cyclePhaseTirsoh` tag in the SCE object. The latter is performed by removing all genes listed under the GO_CELL_CYCLE term (the GO anntotations come from the `signatures` object).
+
+```{r input}
+# Original dataset: PDX for signature inference and Primaries for signature testing
+data("sce.pdx")
+
+primaries_sce_filename <- "data/FinalPaper_SingleCellExperiment_Patient.28082018.RDS"
+sce.primaries <- readRDS(primaries_sce_filename)
+
+# In PDX, keep non-cycling cells only to focus on deep vs shallow quiescence
+sce.pdx <- sce.pdx[, sce.pdx$cyclePhaseTirosh == "NONCYCLING"]
+
+sce.pdx$group6 <- sce.pdx$PRS_2021;
+sce.pdx$group6[sce.pdx$group6 == "PRS"] <- "PRSandTREATED" 
+sce.pdx$group6[sce.pdx$group6 == "Treated"] <- "PRSandTREATED" 
+
+group <- as.factor(sce.pdx$group6)
+names(group) <- colnames(sce.pdx)
+
+counts <- counts(sce.pdx)
+counts <- scde::clean.counts(counts)
+
+## Remove cell cycle genes
+cell_cycle_genes <- signatures[["C5-BP"]][["GO_CELL_CYCLE"]]
+cell_cycle_genes_ensids <- enframe(cell_cycle_genes, name = NULL, value = "symbol") %>%
+  left_join(annotables::grch38, by = "symbol") %>%
+  filter(!is.na(ensgene)) %>%
+  pull(ensgene)
+  
+counts <- counts[!(rownames(counts) %in% cell_cycle_genes_ensids), ]
+
+cnts <- apply(counts,2,
+  function(x) {
+    storage.mode(x) <- 'integer'
+    return(x)
+  }
+)
+
+oldgroupnames <- names(group)
+names(group) <- 1:length(group)
+oldcntsnames <- colnames(cnts)
+colnames(cnts) <- 1:length(group)
+table(group)
+
+
+sce.pdx$chemo_untreated_prs <- sce.pdx$PRS_2021
+
+sce.pdx$PRSandTREATED <- case_when(
+  sce.pdx$PRS_2021 == "PRS" ~ "PRSandTREATED",
+  sce.pdx$PRS_2021 == "Treated" ~ "PRSandTREATED",
+  sce.pdx$PRS_2021 == "Untreated" ~ "Untreated",
+  TRUE ~ "NA"
+)
+
+sce.pdx <- runPCA(sce.pdx)
+sce.primaries <- runPCA(sce.primaries)
+```
+
+
+
+# SingleR approach
+
+There are two attempts at using SingleR here. The first one is pretty naive, where we use SingleR with the 3 classes, Cheom, PRS and Treated separately and apply the classifier to the primaries
+
+## 3way: Chemo - PRS - Untreated
+
+We let SingleR define the signatures and use them to predict the status of the primary cells. SingleR here is using the Wilcox method to look for the top 50 Marker genes for all possible pairwise comparisons.
+
+This diagnostic plot shows the predicted score for each signature (rows) across all cells (columns).
+
+The first plot is for PDX cells (training data). It shows that SingleR is very confident on all calls for Treated cells while there is a small set of cells for which SingleR produces a high score for both PRS and Unreated.
+
+The second plot corresponds to primary cells. In this case, it shows a higher level of confusion between PRS and Treated categories.
+
+```{r singler_3way}
+library(SingleR)
+
+pred.pdx <- SingleR(test = sce.pdx,
+                    ref = sce.pdx,
+                    labels = sce.pdx$chemo_untreated_prs,
+                    de.method = "wilcox", de.n = 50)
+
+plotScoreHeatmap(pred.pdx,
+    clusters = sce.pdx$chemo_untreated_prs)
+
+pred.primaries <- SingleR(test = sce.primaries,
+                    ref = sce.pdx,
+                    labels = sce.pdx$chemo_untreated_prs,
+                    de.method = "wilcox", de.n = 50)
+
+plotScoreHeatmap(pred.primaries, 
+    clusters = sce.primaries$mainGroup)
+```
+
+
+Here are the heatmap of the marker genes for the Chemo, PRS and Untreated cells respectively, first on the PDX and then on the Primaries:
+
+```{r singler_3way.heatmaps_for_pdx}
+all.markers <- metadata(pred.pdx)$de.genes
+sce.pdx$labels <- pred.pdx$labels
+
+# Beta cell-related markers
+plotHeatmap(sce.pdx, order_columns_by="labels",
+    features=unique(c(unlist(all.markers$Treated))),
+    center = T, main = "Treated marker genes on PDXs") 
+plotHeatmap(sce.pdx, order_columns_by="labels",
+    features=unique(c(unlist(all.markers$PRS))),
+    center = T, main = "PRS marker genes on PDXs") 
+plotHeatmap(sce.pdx, order_columns_by="labels",
+    features=unique(c(unlist(all.markers$Untreated))),
+    center = T, main = "Untreated marker genes on PDXs") 
+```
+
+And the corresponding heatmaps showing the expression of the genes on the primaries:
+
+```{r singler_3way.heatmaps_for_primaries}
+all.markers <- metadata(pred.primaries)$de.genes
+sce.primaries$labels <- pred.primaries$labels
+
+# Beta cell-related markers
+plotHeatmap(sce.primaries, order_columns_by="labels",
+    features=unique(c(unlist(all.markers$Treated))),
+    center = T, main = "Treated marker genes on Primaries") 
+plotHeatmap(sce.primaries, order_columns_by="labels",
+    features=unique(c(unlist(all.markers$PRS))),
+    center = T, main = "PRS marker genes on Primaries") 
+plotHeatmap(sce.primaries, order_columns_by="labels",
+    features=unique(c(unlist(all.markers$Untreated))),
+    center = T, main = "Untreated marker genes on Primaries") 
+```
+
+### 3-way SingleR signature on the PDX's PCA (positive control)
+
+In the table and in the plot, we see that SingleR predicts that some Untreated cells (29 cells) could be considered PRS cells. Apart from these, the predicted label matches the original one in almost all cases.
+
+```{r singler_3way.pca.pdx}
+table(sce.pdx$chemo_untreated_prs, pred.pdx$labels)
+
+colData(sce.pdx)$predicted <- pred.pdx$labels
+pca.norm <- plotPCA(sce.pdx, colour_by = "predicted",
+                    shape_by = "chemo_untreated_prs")
+
+print(pca.norm)
+```
+
+
+### 3-way SingleR signature on the Primaries's PCA (testing ability to highlight MRD cells)
+
+The split between PRS and Treated predictions is not always clear (see above). In the predictions on the Primary cells, there is quite a lot of confusion between Treated-PRS-Untreated and Diagnosis-MRD-Relapse.
+
+In general the results are not as clean as expected, although we observe that the PRS signature is underrepresented among the Relapse cells.
+
+It might be possible to tune SingleR a litte to improve the specificity of the PRS calls.
+
+```{r singler_3way.pca.primaries}
+table(sce.primaries$mainGroup, pred.primaries$labels)
+
+colData(sce.primaries)$predicted <- pred.primaries$labels
+pca.norm <- plotPCA(sce.primaries, colour_by = "predicted", shape_by = "mainGroup", point_size = 2)
+
+print(pca.norm)
+```
+
+
+## Deriving a PRSandTREATED signature
+
+By default, SingleR uses just the top 10 genes to define markers for all possible pairwise comparisons (one in each direction). Since in this case we are interested in a signature that works for both treated and PRS cells, we will base our signature on the SingleR 3-way comparison with the top 50 genes but then reduce this to the genes that are marker genes for either PRS or Treated vs Untreated and remove any gene that is considered a marker gene for PRS vs Treated (in either direction). For the sake of completeness, we do the same for the Untreated signature.
+
+The UpSet plot shows the intersections between the different combinations. In blue, the sets used to define the PRSandTREATED signature, in purple the sets used for the Untreated signature.
+
+```{r singler_signature}
+library(SingleR)
+library(UpSetR)
+
+train.pdx <- trainSingleR(ref = sce.pdx,
+                    labels = sce.pdx$chemo_untreated_prs,
+                    de.method = "wilcox", de.n = 50)
+
+upset_list <- list()
+groups <- names(train.pdx$search$extra)
+for (a in groups) {
+  for (b in groups) {
+    upset_list[[paste0(a, "-v-", b)]] <-
+      train.pdx$search$extra[[a]][[b]]
+  }
+}
+
+upset(fromList(upset_list), nsets = 6,
+      sets.bar.color = c("purple", "purple", "blue", "grey23", "blue", "grey23"),
+      # matrix.color = "red",
+      # main.bar.color = "red",
+      # att.color = "black",
+      # mainbar.y.label = "black",
+      queries = list(
+  list(query = intersects, params = list("PRS-v-Untreated"), color = "blue", active = T),
+  list(query = intersects, params = list("Treated-v-Untreated"), color = "blue", active = T),
+  list(query = intersects, params = list("Treated-v-Untreated", "PRS-v-Untreated"), color = "blue", active = T),
+  list(query = intersects, params = list("Untreated-v-PRS"), color = "purple", active = T),
+  list(query = intersects, params = list("Untreated-v-Treated"), color = "purple", active = T),
+  list(query = intersects, params = list("Untreated-v-PRS", "Untreated-v-Treated"), color = "purple", active = T)
+
+))
+
+de.genes <- list(
+  PRSandTREATED = list(
+    PRSandTREATED = c(),
+    Untreated = setdiff(
+      union(
+        train.pdx$search$extra$Treated$Untreated,
+        train.pdx$search$extra$PRS$Untreated),
+      union(
+        train.pdx$search$extra$Treated$PRS,
+        train.pdx$search$extra$PRS$Treated))
+  ),
+  Untreated = list(
+    PRSandTREATED = setdiff(
+      union(
+        train.pdx$search$extra$Untreated$Treated,
+        train.pdx$search$extra$Untreated$PRS),
+      union(
+        train.pdx$search$extra$Treated$PRS,
+        train.pdx$search$extra$PRS$Treated)),
+    Untreated = c()
+  )
+)
+
+
+pred.pdx <- SingleR(test = sce.pdx,
+                    ref = sce.pdx,
+                    labels = sce.pdx$PRSandTREATED,
+                    genes = de.genes,
+                    de.method = "wilcox")
+
+plotScoreHeatmap(pred.pdx, 
+    clusters = sce.pdx$chemo_untreated_prs)
+
+pred.primaries <- SingleR(test = sce.primaries,
+                    ref = sce.pdx,
+                    labels = sce.pdx$PRSandTREATED,
+                    genes = de.genes,
+                    de.method = "wilcox")
+
+plotScoreHeatmap(pred.primaries, 
+    clusters = sce.primaries$mainGroup)
+```
+
+In the diagnostic plots, we observe that this signature is very good at telling PRS and treated cells from untreated cells (as one would expect as these are the training data). Again, the PRSandTREATED signature is found in the primaries as well, although it is found in all cell populations.
+
+Nevertheless, we want to focus on the genes used to define the PRS and TREATED signature. We now extract these genes and map the expression of this signature on the PCAs.
+
+
+### SingleR signature on the PDX's PCA (positive control) {.tabset}
+
+As expected, the signature is very good at highlighting treated cells but also correctly identifies a fair number of PRS cells.
+
+```{r singler_signature.pca.pdx, results = "asis"}
+PRSandTREATED_signature <- de.genes$PRSandTREATED$Untreated
+singler_signature <- list("PRSandTREATED" = PRSandTREATED_signature)
+
+sigs_ave_lognormcounts <- get_signature_data_matrix_arithmeticMean(
+  data = logcounts(sce.pdx),
+  signatureList = list(gene_list = singler_signature))
+
+colData(sce.pdx)$PRSandTREATED_signature <-
+  sigs_ave_lognormcounts[, 1]
+
+pca_data <- tibble(
+  PC1 = reducedDim(sce.pdx, "PCA")[, 1],
+  PC2 = reducedDim(sce.pdx, "PCA")[, 2],
+  PRSandTREATED_signature = sce.pdx$PRSandTREATED_signature,
+  shape = sce.pdx$chemo_untreated_prs)
+
+gaussian_weighted_density <- function(x, y, x0, y0, signal, w, smooth = 5) {
+  res <- sum(exp(-sqrt((x - x0)^2 + (y - y0)^2)/ smooth) * w * signal) /
+    sum(exp(-sqrt((x - x0)^2 + (y - y0)^2)/ smooth) * w)
+  return(res)
+}
+
+range_pc1 <- extendrange(pca_data$PC1)
+range_pc1 <- seq(range_pc1[1], range_pc1[2], length.out = 100)
+range_pc2 <- extendrange(pca_data$PC2)
+range_pc2 <- seq(range_pc2[1], range_pc2[2], length.out = 100)
+
+background_pc1 <- extendrange(range_pc1, f = 0.1)
+background_pc2 <- extendrange(range_pc2, f = 0.1)
+background_pca <- expand_grid(
+  PC1 = seq(background_pc1[1], background_pc1[2], length.out = 100),
+  PC2 = seq(background_pc2[1], background_pc2[2], length.out = 100),
+  PRSandTREATED_signature = min(pca_data$PRSandTREATED_signature))
+
+pca_data_with_border <- rbind(cbind(pca_data[, 1:3], weight = 1),
+                              cbind(background_pca, weight = 0.01))
+signature_density <- expand_grid(PC1 = range_pc1, PC2 = range_pc2)
+signature_density$value <- apply(signature_density, 1, function(x) {
+  gaussian_weighted_density(pca_data_with_border$PC1, pca_data_with_border$PC2,
+                            x[1], x[2],
+                            pca_data_with_border$PRSandTREATED_signature,
+                            pca_data_with_border$weight)
+  })
+# signature_density$value <- apply(signature_density, 1, function(x) {
+#   gaussian_weighted_density(pca_data$PC1, pca_data$PC2, x[1], x[2], pca_data$PRSandTREATED_signature)
+#   })
+
+cat("\n\n#### PRS Density (WR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_raster(data = signature_density,
+              aes(x = PC1, y = PC2, fill = value)) +
+  scale_fill_gradientn(
+    name = "PRS density",
+    # colors = c("#5353DC", "#8383DC", "#A3A3DC", "#F6A3A3", "#F65353")) +
+    colors = c("#FFFFFF", "#FFFFFF", "#F6EEEE", "#F6DDDD", "#F6A3A3", "#F65353")) +
+  ggnewscale::new_scale("fill") +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = shape),
+             pch = 21, col = "black", size = 3) +
+  scale_fill_manual(name = "Treatment", values = paper_palette) +
+  coord_cartesian(expand = F) +
+  theme_bw() +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### PRS Density (BR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_raster(data = signature_density,
+              aes(x = PC1, y = PC2, fill = value)) +
+  scale_fill_gradientn(
+    name = "PRS density",
+    colors = c("#5353DC", "#8383DC", "#A3A3DC", "#F6A3A3", "#F65353")) +
+    # colors = c("#FFFFFF", "#F6DDDD", "#F6CCCC", "#F6A3A3", "#F65353")) +
+  ggnewscale::new_scale("fill") +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = shape),
+             pch = 21, col = "black", size = 3) +
+  scale_fill_manual(name = "Treatment", values = paper_palette) +
+  coord_cartesian(expand = F) +
+  theme_bw() +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### PRS Signature (BR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, color = PRSandTREATED_signature), size = 3, alpha = 0.6) +
+  scale_shape_discrete(name = "Treatment") +
+  scale_color_gradientn(
+    name = "PRS",
+    colors = c("darkblue", "darkblue", "darkblue", "red", "red")) + 
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### Violin plot (BR)\n\n")
+colData(sce.pdx) %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_violin(aes(x = chemo_untreated_prs, y = PRSandTREATED_signature, group = chemo_untreated_prs)) +
+  geom_jitter(aes(x = chemo_untreated_prs, y = PRSandTREATED_signature, group = chemo_untreated_prs, col = PRSandTREATED_signature), height = 0, width = 0.2) +
+  scale_color_gradientn(
+    name = "PRS",
+    colors = c("darkblue", "darkblue", "darkblue", "red", "red")) +
+  theme_bw()
+
+cat("\n\n#### Signature Heatmap\n\n")
+plotHeatmap(sce.pdx, order_columns_by="PRSandTREATED_signature",
+    features=de.genes$PRSandTREATED$Untreated,
+    colour_columns_by = c("chemo_untreated_prs", "log10_total_counts"),
+    center = T, main = "PRSandTREATED signature in PDXs") 
+```
+
+#### Table PDX cells
+
+```{r singler_signature.PDX_cells_table, cache = F}
+PRSandTREATED_signature_on_PDX_cells <- colData(sce.pdx) %>%
+  as_tibble() %>%
+  dplyr::select(cell = originalNames, CycleStatus, chemo_untreated_prs, PRSandTREATED_signature)
+
+PRSandTREATED_signature_on_PDX_cells %>%
+  arrange(desc(PRSandTREATED_signature)) %>%
+  DT::datatable(
+    extensions = 'Buttons', options = list(
+      dom = 'Bfrtip',
+      buttons = list(
+        'copy',
+        list(extend = 'csv', filename = "PRSandTREATED_signature_on_PDX_cells"),
+        list(extend = 'excel', filename = "PRSandTREATED_signature_on_PDX_cells"))
+    )
+  )
+```
+
+### SingleR signature on the Primaries' PCA (testing ability to highlight MRD cells) {.tabset}
+
+The signature is strongest is MRD cells, especially in the ones in the "far" cluster. Interestigly a few diagnostic cells in both patients also display a strong PRSandTREATED signature. Among the different cell populations, Relapse cells are the ones with the smallest peak for this signature.
+
+```{r singler_signature.pca.primaries, results = "asis"}
+PRSandTREATED_signature <- de.genes$PRSandTREATED$Untreated
+singler_signature <- list("PRSandTREATED" = PRSandTREATED_signature)
+
+sigs_ave_lognormcounts <- get_signature_data_matrix_arithmeticMean(
+  data = logcounts(sce.primaries), signatureList = list(gene_list = singler_signature))
+
+genes <- intersect(PRSandTREATED_signature, rownames(sce.primaries))
+colData(sce.primaries)$PRSandTREATED_signature <-
+  sigs_ave_lognormcounts[, 1]
+
+pca_data <- tibble(
+  PC1 = reducedDim(sce.primaries, "PCA")[, 1],
+  PC2 = reducedDim(sce.primaries, "PCA")[, 2],
+  PRSandTREATED_signature = sce.primaries$PRSandTREATED_signature,
+  shape = sce.primaries$mainGroup,
+  patientID = sce.primaries$patientID)
+
+gaussian_weighted_density <- function(x, y, x0, y0, signal, w, smooth = 5) {
+  res <- sum(exp(-sqrt((x - x0)^2 + (y - y0)^2)/ smooth) * w * signal) /
+    sum(exp(-sqrt((x - x0)^2 + (y - y0)^2)/ smooth) * w)
+  return(res)
+}
+
+range_pc1 <- extendrange(pca_data$PC1)
+range_pc1 <- seq(range_pc1[1], range_pc1[2], length.out = 100)
+range_pc2 <- extendrange(pca_data$PC2)
+range_pc2 <- seq(range_pc2[1], range_pc2[2], length.out = 100)
+
+background_pc1 <- extendrange(range_pc1, f = 0.1)
+background_pc2 <- extendrange(range_pc2, f = 0.1)
+background_pca <- expand_grid(
+  PC1 = seq(background_pc1[1], background_pc1[2], length.out = 100),
+  PC2 = seq(background_pc2[1], background_pc2[2], length.out = 100),
+  PRSandTREATED_signature = min(pca_data$PRSandTREATED_signature))
+
+pca_data_with_border <- rbind(cbind(pca_data[, 1:3], weight = 1),
+                              cbind(background_pca, weight = 0.01))
+signature_density <- expand_grid(PC1 = range_pc1, PC2 = range_pc2)
+signature_density$value <- apply(signature_density, 1, function(x) {
+  gaussian_weighted_density(pca_data_with_border$PC1, pca_data_with_border$PC2,
+                            x[1], x[2],
+                            pca_data_with_border$PRSandTREATED_signature,
+                            pca_data_with_border$weight)
+  })
+
+cat("\n\n#### PRS Density (WR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_raster(data = signature_density,
+              aes(x = PC1, y = PC2, fill = value)) +
+  scale_fill_gradientn(
+    name = "PRS density",
+    # colors = c("#5353DC", "#8383DC", "#A3A3DC", "#F6A3A3", "#F65353")) +
+    colors = c("#FFFFFF", "#FFFFFF", "#F6EEEE", "#F6DDDD", "#F6A3A3", "#F65353")) +
+  ggnewscale::new_scale("fill") +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = shape, col = patientID),
+             pch = 21, size = 3) +
+  scale_color_manual(values = c("black", "grey")) +
+  scale_fill_manual(name = "Treatment", values = paper_palette) +
+  coord_cartesian(expand = F) +
+  theme_bw() +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### PRS Density (BR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_raster(data = signature_density,
+              aes(x = PC1, y = PC2, fill = value)) +
+  scale_fill_gradientn(
+    name = "PRS density",
+    colors = c("#5353DC", "#8383DC", "#A3A3DC", "#F6A3A3", "#F65353")) +
+    # colors = c("#FFFFFF", "#F6DDDD", "#F6CCCC", "#F6A3A3", "#F65353")) +
+  ggnewscale::new_scale("fill") +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = shape, col = patientID),
+             pch = 21, size = 3) +
+  scale_color_manual(values = c("black", "grey")) +
+  scale_fill_manual(name = "Treatment", values = paper_palette) +
+  coord_cartesian(expand = F) +
+  theme_bw() +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### PRS Signature (BR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = PRSandTREATED_signature, col = patientID),
+             size = 3, alpha = 0.6) +
+  scale_color_manual(values = c("black", "grey")) +
+  scale_shape_manual(name = "Treatment", values = 21:23) +
+  scale_fill_gradientn(
+    name = "PRS",
+    colors = c("darkblue", "darkblue", "darkblue", "red", "red")) + 
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### Violin plot (BR)\n\n")
+gg <- colData(sce.primaries) %>%
+  as_tibble() %>%
+  mutate(patientID = case_when(
+    patientID == "PT2278" ~ "PT2",
+    patientID == "PT24" ~ "PT1",
+    TRUE ~ patientID
+  )) %>%
+  ggplot() +
+  geom_violin(aes(x = mainGroup, y = PRSandTREATED_signature, group = mainGroup)) +
+  geom_jitter(aes(x = mainGroup, y = PRSandTREATED_signature, group = mainGroup,
+                  color = PRSandTREATED_signature, shape = patientID),
+              height = 0, width = 0.2) +
+  scale_shape_manual(name = "Patient", values = 15:16) +
+  scale_color_gradientn(
+    name = "PRS",
+    colors = c("darkblue", "darkblue", "darkblue", "red", "red")) +
+  theme_bw() +
+  xlab(NULL)
+print(gg)
+
+gg <- gg +
+  theme(text = element_text(size = 10),
+        panel.grid = element_blank(),
+        legend.key.width = unit(0.03, "npc"),
+        legend.key.height = unit(0.05, "npc"))
+
+ggsave("output/figures/Fig8E_PRS_signature_violin.pdf",
+       plot = gg, device = "pdf", width = 3.5, height = 3)
+
+wb <- openxlsx::createWorkbook()
+ws_name <- "Fig8E PRS signature"
+ws <- openxlsx::addWorksheet(wb, ws_name)
+
+excel_data <- colData(sce.primaries) %>%
+  as_tibble(rownames = "Cell") %>%
+  mutate(patientID = case_when(
+    patientID == "PT2278" ~ "PT2",
+    patientID == "PT24" ~ "PT1",
+    TRUE ~ patientID
+  )) %>%
+  dplyr::select(Cell, Group = mainGroup, PatientID = patientID, PRSandTREATED_signature)
+
+openxlsx::writeDataTable(wb, sheet = ws, x = excel_data,
+               rowNames = F, tableStyle = "none", withFilter = F)
+openxlsx::setColWidths(wb, ws, cols = 1:ncol(excel_data), widths = "auto")
+openxlsx::addStyle(wb, ws, rows = 1, cols = 1:ncol(excel_data),
+                   style = openxlsx::createStyle(textDecoration = "bold"))
+openxlsx::saveWorkbook(wb, "output/scRNAseq_data_Fig8E.xlsx", overwrite = TRUE)
+
+cat("\n\n#### Signature Heatmap\n\n")
+plotHeatmap(sce.primaries, order_columns_by="PRSandTREATED_signature",
+    features = intersect(de.genes$PRSandTREATED$Untreated,
+                         rownames(sce.primaries)),
+    colour_columns_by = c("mainGroup", "log10_total_counts"),
+    center = T, main = "PRSandTREATED signature in Patient") 
+```
+
+#### Table MRD cells
+
+```{r singler_signature.MRD_cells_table, cache = F}
+PRSandTREATED_signature_on_MRD_cells <-
+colData(sce.primaries) %>%
+  as_tibble() %>%
+  dplyr::filter(mainGroup == "MRD") %>%
+  dplyr::rename("RNA cell" = originalNames) %>%
+  dplyr::mutate("DNA cell" = sub("VT32", "VT33", `RNA cell`)) %>%
+  dplyr::select(patientID, mainGroup, "RNA cell", "DNA cell", PRSandTREATED_signature)
+
+PRSandTREATED_signature_on_MRD_cells %>%
+  arrange(desc(PRSandTREATED_signature)) %>%
+  DT::datatable(
+    extensions = 'Buttons', options = list(
+      dom = 'Bfrtip',
+      buttons = list(
+        'copy',
+        list(extend = 'csv', filename = "PRSandTREATED_signature_on_MRD_cells"),
+        list(extend = 'excel', filename = "PRSandTREATED_signature_on_MRD_cells"))
+    )
+  )
+```
+
+### Same but for Pt2278 (PT2) only {.tabset}
+
+This is simply a repetition of the previous section, but by plotting the resutls on the Pt2278 (PT2) cells only.
+
+```{r singler_signature.pca.primaries.pt2278, results = "asis"}
+PRSandTREATED_signature <- de.genes$PRSandTREATED$Untreated
+singler_signature <- list("PRSandTREATED" = PRSandTREATED_signature)
+
+sce.primaries.pt2278 <- sce.primaries[, sce.primaries$patientID == "PT2278"]
+sigs_ave_lognormcounts <- get_signature_data_matrix_arithmeticMean(
+  data = logcounts(sce.primaries.pt2278), signatureList = list(gene_list = singler_signature))
+
+genes <- intersect(PRSandTREATED_signature, rownames(sce.primaries.pt2278))
+colData(sce.primaries.pt2278)$PRSandTREATED_signature <-
+  sigs_ave_lognormcounts[, 1]
+
+pca_data <- tibble(
+  PC1 = reducedDim(sce.primaries.pt2278, "PCA")[, 1],
+  PC2 = reducedDim(sce.primaries.pt2278, "PCA")[, 2],
+  PRSandTREATED_signature = sce.primaries.pt2278$PRSandTREATED_signature,
+  shape = sce.primaries.pt2278$mainGroup,
+  patientID = sce.primaries.pt2278$patientID)
+
+gaussian_weighted_density <- function(x, y, x0, y0, signal, w, smooth = 5) {
+  res <- sum(exp(-sqrt((x - x0)^2 + (y - y0)^2)/ smooth) * w * signal) /
+    sum(exp(-sqrt((x - x0)^2 + (y - y0)^2)/ smooth) * w)
+  return(res)
+}
+
+range_pc1 <- extendrange(pca_data$PC1)
+range_pc1 <- seq(range_pc1[1], range_pc1[2], length.out = 100)
+range_pc2 <- extendrange(pca_data$PC2)
+range_pc2 <- seq(range_pc2[1], range_pc2[2], length.out = 100)
+
+background_pc1 <- extendrange(range_pc1, f = 0.1)
+background_pc2 <- extendrange(range_pc2, f = 0.1)
+background_pca <- expand_grid(
+  PC1 = seq(background_pc1[1], background_pc1[2], length.out = 100),
+  PC2 = seq(background_pc2[1], background_pc2[2], length.out = 100),
+  PRSandTREATED_signature = min(pca_data$PRSandTREATED_signature))
+
+pca_data_with_border <- rbind(cbind(pca_data[, 1:3], weight = 1),
+                              cbind(background_pca, weight = 0.01))
+signature_density <- expand_grid(PC1 = range_pc1, PC2 = range_pc2)
+signature_density$value <- apply(signature_density, 1, function(x) {
+  gaussian_weighted_density(pca_data_with_border$PC1, pca_data_with_border$PC2,
+                            x[1], x[2],
+                            pca_data_with_border$PRSandTREATED_signature,
+                            pca_data_with_border$weight)
+  })
+
+cat("\n\n#### PRS Density (WR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_raster(data = signature_density,
+              aes(x = PC1, y = PC2, fill = value)) +
+  scale_fill_gradientn(
+    name = "PRS density",
+    # colors = c("#5353DC", "#8383DC", "#A3A3DC", "#F6A3A3", "#F65353")) +
+    colors = c("#FFFFFF", "#FFFFFF", "#F6EEEE", "#F6DDDD", "#F6A3A3", "#F65353")) +
+  ggnewscale::new_scale("fill") +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = shape),
+             pch = 21, size = 3) +
+  scale_fill_manual(name = "Treatment", values = paper_palette) +
+  coord_cartesian(expand = F) +
+  theme_bw() +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### PRS Density (BR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_raster(data = signature_density,
+              aes(x = PC1, y = PC2, fill = value)) +
+  scale_fill_gradientn(
+    name = "PRS density",
+    colors = c("#5353DC", "#8383DC", "#A3A3DC", "#F6A3A3", "#F65353")) +
+    # colors = c("#FFFFFF", "#F6DDDD", "#F6CCCC", "#F6A3A3", "#F65353")) +
+  ggnewscale::new_scale("fill") +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = shape),
+             pch = 21, size = 3) +
+  scale_fill_manual(name = "Treatment", values = paper_palette) +
+  coord_cartesian(expand = F) +
+  theme_bw() +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### PRS Signature (BR)\n\n")
+pca_data %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_point(aes(x = PC1, y = PC2, shape = shape, fill = PRSandTREATED_signature),
+             size = 3, alpha = 0.6) +
+  scale_shape_manual(name = "Treatment", values = 21:23) +
+  scale_fill_gradientn(
+    name = "PRS",
+    colors = c("darkblue", "darkblue", "darkblue", "red", "red")) + 
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  theme(legend.key.size = unit(0.8, "lines"))
+
+cat("\n\n#### Violin plot (BR)\n\n")
+colData(sce.primaries.pt2278) %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_violin(aes(x = mainGroup, y = PRSandTREATED_signature, group = mainGroup)) +
+  geom_jitter(aes(x = mainGroup, y = PRSandTREATED_signature, group = mainGroup, col = PRSandTREATED_signature), height = 0, width = 0.2) +
+  scale_color_gradientn(
+    name = "PRS",
+    colors = c("darkblue", "darkblue", "darkblue", "red", "red")) +
+  theme_bw()
+```
+
+### Genes in the Signature
+
+```{r singler_signature.gene_list, cache = F}
+PRSandTREATED_signature_gene_list <-
+  enframe(de.genes$PRSandTREATED$Untreated, name = NULL, value= "ensgene") %>%
+  left_join(annotables::grch38, by = "ensgene") %>%
+  dplyr::select(ensgene, symbol, biotype, description)
+
+PRSandTREATED_signature_gene_list %>%
+  DT::datatable(
+    extensions = 'Buttons', options = list(
+      dom = 'Bfrtip',
+      buttons = list(
+        'copy',
+        list(extend = 'csv', filename = "PRSandTREATED_signature_gene_list"),
+        list(extend = 'excel', filename = "PRSandTREATED_signature_gene_list"))
+    )
+  )
+
+usethis::use_directory("data")
+save(PRSandTREATED_signature_gene_list,
+     PRSandTREATED_signature_on_PDX_cells,
+     PRSandTREATED_signature_on_MRD_cells,
+     file = "data/PRSandTREATED_signature.rda")
+```
+
+#### Functional analysis of the signature
+
+This list of genes can be used to look for GO term overrepresentation. This is performed using the Bioconductor package TopGO. This package implements several tests. We use here the Fisher's exact and the Kolmogorov-Smirnov tests.
+
+<div class="alert alert-danger">
+  <strong>Warning:</strong> The p-values returned by TopGO do not seem to be adjusted for multiple testing. An interactive search for enriched GO terms using Panther ([http://pantherdb.org](http://pantherdb.org)) returned NO SIGNIFICANT HITS!
+</div>
+
+
+```{r}
+gene_tibble <- enframe(rownames(sce.pdx), name = NULL, value = "ensgene") %>%
+  mutate(value = factor(as.integer(ensgene %in% de.genes$PRSandTREATED$Untreated )))
+
+geneList <- gene_tibble$value
+names(geneList) <- gene_tibble$ensgene
+
+GOdata <- new("topGOdata",
+              ontology = "BP",
+              allGenes = geneList,
+              nodeSize = 10,
+              annot = annFUN.org,
+              mapping = "org.Hs.eg.db",
+              ID = "ensembl")
+
+resultFis <- runTest(GOdata, algorithm = "weight01", statistic = "fisher")
+resultKS <- runTest(GOdata, algorithm = "weight01", statistic = "ks")
+
+GenTable(GOdata, classic = resultFis, KS = resultKS,
+         orderBy = "KS", ranksOf = "classic", topNodes = 20)
+```
+
+
