@@ -1,0 +1,216 @@
+---
+title: "Bulk RNA-seq Differential Expression with DESeq2"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, warning = FALSE, message = FALSE}
+htmltools::tagList(rmarkdown::html_dependency_font_awesome())
+# knitr::opts_chunk$set(cache = T, autodep = T)
+
+library(knitr)
+library(tidyverse)
+library(DESeq2)
+library(fgsea)
+library(ggrepel)
+library(annotables)
+library(DT)
+```
+
+
+# Introduction
+
+In this document, we are looking at the differences between groups of samples.
+
+Please refer to the [Bulk Data](00-data-bulk.html) section for more info.
+
+```{r read_data}
+data("bulk4_dds")
+bulk_dds.mss <- readRDS("data/Virginia_BulkAnalysis_23022018.allDataHere.DESeq_object.rds")
+```
+
+```{r GSEA_pathways}
+data("signatures")
+pathways <- c(signatures[["H"]],
+              signatures[["lineages"]],
+              signatures[["B signaling"]])
+# pathways <- c(signatures[["H"]])
+names(pathways) <- gsub("HALLMARK_", "", names(pathways))
+```
+
+```{r DGE_function}
+DGE <- function(deseq, grouping, c1, c2) {
+  res <- results(deseq, contrast = c(grouping, c1, c2))
+  resOrdered <- res[order(res$stat), ]
+  resOrdered <- resOrdered[complete.cases(resOrdered), ]
+  resOrdered <- rownames_to_column(data.frame(resOrdered), var = "ensgene") %>%
+    dplyr::select(ensgene, log2FoldChange, stat, pvalue, padj) %>%
+    left_join(grch38, by = "ensgene")
+
+  return(resOrdered)
+}
+```
+
+```{r run_DESeq2_for_combinations_function, results="asis"}
+run_DESeq2_for_combinations <- function(deseq_obj, combinations, factor, label,
+                                        save_data = F, level = 2) {
+  if (!missing(label)) {
+    label <- paste0("deseq2-", label, "-")
+  } else {
+    label <- "deseq2-"
+  }
+  # fgsea_list <- list()
+  for (i in 1:nrow(combinations)) {
+    if (!is.null(opts_knit$get("output.dir"))) {
+      cat(paste0("\n", paste0(rep("#", level), collapse = ""),
+                 " ", combinations$first[i], " vs ", combinations$second[i], "\n\n"))
+    }
+  
+    contrast_name <- paste0(combinations$first[i], "-vs-", combinations$second[i])
+  
+    my_res <- DGE(deseq_obj,
+                  factor,
+                  combinations$first[i],
+                  combinations$second[i])
+  
+    filename = paste0(label, contrast_name)
+    print(htmltools::tagList(
+      datatable(my_res %>% filter(padj < 0.05 & stat > 0) %>% arrange(desc(stat)) %>% head(n = 100),
+                caption = paste(combinations$first[i],
+                                "vs", combinations$second[i]),
+                options = list(dom = 'frtip',
+                               searchHighlight = TRUE)
+                ),
+      htmltools::tags$br(),
+      datatable(my_res %>% filter(padj < 0.05 & stat < 0) %>% arrange(stat) %>% head(n = 100),
+                caption = paste(combinations$first[i],
+                                "vs", combinations$second[i]),
+                options = list(dom = 'frtip',
+                               searchHighlight = TRUE)
+                ),
+      htmltools::tags$br()
+    ))
+    if (save_data) {
+      save_obj <- my_res
+      usethis::use_directory("output")
+      saveRDS(save_obj, file = paste0("output/", filename, ".rds"))
+    }
+  }
+}
+```
+
+
+# DESeq2 object
+
+## Treated vs Untreated -- 3 patients
+
+```{r}
+mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT1", "PT12", "PT13")]
+mini_bulk4_dds$patient <- droplevels(mini_bulk4_dds$patient)
+mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
+design(mini_bulk4_dds) <- formula(~patient + group)
+mini_bulk4_dds <- DESeq(mini_bulk4_dds)
+```
+
+
+```{r}
+my_combinations <- colData(mini_bulk4_dds) %>% as_tibble() %>%
+  group_by(patient, group) %>%
+  summarise(n = n()) %>%
+  left_join(filter(., group %in% c("Untreated", "Never treated")),
+            by = c("patient")) %>%
+  filter(group.x != group.y) %>%
+  select(patient, first = group.x, second = group.y, first.n = n.x, second.n = n.y) %>%
+  mutate_at(c("first", "second"), as.character)
+
+datatable(my_combinations, extensions = "Buttons",
+          options = list(searchHighlight = TRUE,
+                         buttons = list("copy", 'csv', 'excel')))
+```
+
+```{r, results="asis"}
+run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
+                            label = "mini_bulk4_dds.3pts", save_data = T)
+```
+
+## Treated vs Untreated -- PT1
+
+```{r}
+mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT1")]
+mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
+design(mini_bulk4_dds) <- formula(~group)
+mini_bulk4_dds <- DESeq(mini_bulk4_dds)
+```
+
+
+```{r, results="asis"}
+run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
+                            label = "mini_bulk4_dds.pt1", save_data = T)
+```
+
+## Treated vs Untreated -- PT12
+
+```{r}
+mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT12")]
+mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
+design(mini_bulk4_dds) <- formula(~group)
+mini_bulk4_dds <- DESeq(mini_bulk4_dds)
+```
+
+
+```{r, results="asis"}
+run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
+                            label = "mini_bulk4_dds.pt12", save_data = T)
+```
+
+## Treated vs Untreated -- PT13
+
+```{r}
+mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT13")]
+mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
+design(mini_bulk4_dds) <- formula(~group)
+mini_bulk4_dds <- DESeq(mini_bulk4_dds)
+```
+
+
+```{r, results="asis"}
+run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
+                            label = "mini_bulk4_dds.pt13", save_data = T)
+```
+
+## Treatment response -- PT2
+
+```{r}
+mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT2")]
+mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
+design(mini_bulk4_dds) <- formula(~group)
+mini_bulk4_dds <- DESeq(mini_bulk4_dds)
+```
+
+```{r}
+my_combinations <- colData(mini_bulk4_dds) %>% as_tibble() %>%
+  group_by(patient, group) %>%
+  summarise(n = n()) %>%
+  left_join(filter(., group %in% c("Untreated", "Never treated")),
+            by = c("patient")) %>%
+  filter(group.x != group.y) %>%
+  select(patient, first = group.x, second = group.y, first.n = n.x, second.n = n.y) %>%
+  mutate_at(c("first", "second"), as.character)
+
+additional_combination <- my_combinations %>%
+  filter(grepl("Acute", first)) %>%
+  mutate(second = my_combinations %>%
+           filter(grepl("Chronic", first)) %>% pull(first),
+         second.n = my_combinations %>%
+           filter(grepl("Chronic", first)) %>% pull(first.n))
+
+my_combinations <- rbind(my_combinations, additional_combination)
+
+datatable(my_combinations)
+```
+
+```{r, results="asis"}
+run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations, "group",
+                            label = "mini_bulk4_dds.pt2", save_data = T)
+```
