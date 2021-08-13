@@ -1,0 +1,44 @@
+﻿Patient,Sample,Assay,n_samples
+PT1,Diagnosis,scRNA,66
+PT1,Diagnosis,scWGS,59
+PT1,MRD (G&T),scRNA,5
+PT1,MRD (G&T),scWGS,0
+PT1,Relapse,scRNA,69
+PT1,PDX untreated,Bulk RNA,32
+PT1,PDX untreated,scRNA,448
+PT1,PDX untreated,scWGS,251
+PT1,PDX untreated,EPIC,23
+PT1,PDX treated,Bulk RNA,11
+PT1,PDX treated,scRNA,163
+PT1,PDX treated,scWGS,69
+PT1,PDX treated,EPIC,9
+PT2,Diagnosis,scRNA,68
+PT2,Diagnosis,scWGS,9
+PT2,MRD (G&T),scRNA,51
+PT2,MRD (G&T),scWGS,0
+PT2,Relapse,scRNA,73
+PT2,PDX untreated,Bulk RNA,6
+PT2,PDX withdrawn,Bulk RNA,6
+PT2,PDX chronically,Bulk RNA,6
+PT2,PDX acutely,Bulk RNA,8
+PT2,PDX relapse,Bulk RNA,3
+PT3,Diagnosis,scWGS,63
+PT4,Diagnosis,scWGS,86
+PT5,Diagnosis,scWGS,77
+PT6,Diagnosis,scWGS,45
+PT7,Diagnosis,Bulk WGS,257
+PT7,Diagnosis,sc Q-PCR,67
+PT8,Diagnosis,Bulk WGS,82
+PT8,Diagnosis,sc Q-PCR,80
+PT9,Diagnosis,Bulk WGS,84
+PT9,Diagnosis,sc Q-PCR,83
+PT10,Diagnosis,Bulk WGS,331
+PT10,Diagnosis,sc Q-PCR,81
+PT11,Diagnosis,Bulk WGS,80
+PT11,Diagnosis,sc Q-PCR,30
+PT12,PDX untreated,Bulk RNA,3
+PT12,PDX treated,Bulk RNA,4
+PT13,PDX untreated,Bulk RNA,2
+PT13,PDX treated,Bulk RNA,2
+CB1,chord blood,scWGS,12
+CB2,chord blood,scWGS,12
