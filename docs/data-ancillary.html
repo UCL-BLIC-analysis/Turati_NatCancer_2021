@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>Ancillary Data</title>
+
+<script src="site_libs/jquery-1.12.4/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/united.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/jqueryui-1.11.4/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<script src="site_libs/navigation-1.1/codefolding.js"></script>
+<script src="site_libs/navigation-1.1/sourceembed.js"></script>
+<script src="site_libs/htmlwidgets-1.5.1/htmlwidgets.js"></script>
+<link href="site_libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet" />
+<script src="site_libs/datatables-binding-0.13/datatables.js"></script>
+<link href="site_libs/dt-core-1.10.20/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="site_libs/dt-core-1.10.20/css/jquery.dataTables.extra.css" rel="stylesheet" />
+<script src="site_libs/dt-core-1.10.20/js/jquery.dataTables.min.js"></script>
+<link href="site_libs/crosstalk-1.1.0.1/css/crosstalk.css" rel="stylesheet" />
+<script src="site_libs/crosstalk-1.1.0.1/js/crosstalk.min.js"></script>
+
+<link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/master/img/reproducible.png">
+<!-- Add a small amount of space between sections. -->
+<style type="text/css">
+div.section {
+  padding-top: 12px;
+}
+</style>
+
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css" data-origin="pandoc">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; background-color: #f8f8f8; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+pre, code { background-color: #f8f8f8; }
+code > span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+code > span.dt { color: #204a87; } /* DataType */
+code > span.dv { color: #0000cf; } /* DecVal */
+code > span.bn { color: #0000cf; } /* BaseN */
+code > span.fl { color: #0000cf; } /* Float */
+code > span.ch { color: #4e9a06; } /* Char */
+code > span.st { color: #4e9a06; } /* String */
+code > span.co { color: #8f5902; font-style: italic; } /* Comment */
+code > span.ot { color: #8f5902; } /* Other */
+code > span.al { color: #ef2929; } /* Alert */
+code > span.fu { color: #000000; } /* Function */
+code > span.er { color: #a40000; font-weight: bold; } /* Error */
+code > span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #000000; } /* Constant */
+code > span.sc { color: #000000; } /* SpecialChar */
+code > span.vs { color: #4e9a06; } /* VerbatimString */
+code > span.ss { color: #4e9a06; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #000000; } /* Variable */
+code > span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+code > span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+code > span.ex { } /* Extension */
+code > span.at { color: #c4a000; } /* Attribute */
+code > span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+code > span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+
+.sourceCode .row {
+  width: 100%;
+}
+.sourceCode {
+  overflow-x: auto;
+}
+.code-folding-btn {
+  margin-right: -30px;
+}
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+#rmd-source-code {
+  display: none;
+}
+</style>
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+</style>
+
+
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+  padding-top: 51px;
+  padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar)  */
+.section h1 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h2 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h3 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h4 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h5 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h6 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #ffffff;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script>
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.parent().addClass('active');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+<style type="text/css">
+.code-folding-btn { margin-bottom: 4px; }
+</style>
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row-fluid">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Turati_NatCancer_2021</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="data-index.html">Data</a>
+</li>
+<li>
+  <a href="bulkRNA-index.html">Bulk RNA-seq</a>
+</li>
+<li>
+  <a href="scRNA-index.html">scRNA-seq</a>
+</li>
+<li>
+  <a href="scWGS-index.html">scWGS-seq</a>
+</li>
+<li>
+  <a href="methyl-index.html">Methylation</a>
+</li>
+<li>
+  <a href="about.html">About</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div class="fluid-row" id="header">
+
+<div class="btn-group pull-right">
+<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Code</span> <span class="caret"></span></button>
+<ul class="dropdown-menu" style="min-width: 50px;">
+<li><a id="rmd-show-all-code" href="#">Show All Code</a></li>
+<li><a id="rmd-hide-all-code" href="#">Hide All Code</a></li>
+<li role="separator" class="divider"></li>
+<li><a id="rmd-download-source" href="#">Download Rmd</a></li>
+</ul>
+</div>
+
+
+
+<h1 class="title toc-ignore">Ancillary Data</h1>
+
+</div>
+
+
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span> workflowr <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
+</button>
+</p>
+<div id="workflowr-report" class="collapse">
+<ul class="nav nav-tabs">
+<li class="active">
+<a data-toggle="tab" href="#summary">Summary</a>
+</li>
+<li>
+<a data-toggle="tab" href="#checks"> Checks <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> </a>
+</li>
+<li>
+<a data-toggle="tab" href="#versions">Past versions</a>
+</li>
+</ul>
+<div class="tab-content">
+<div id="summary" class="tab-pane fade in active">
+<p>
+<strong>Last updated:</strong> 2021-08-13
+</p>
+<p>
+<strong>Checks:</strong> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7 <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> 0
+</p>
+<p>
+<strong>Knit directory:</strong> <code>Turati_NatCancer_2021/</code> <span class="glyphicon glyphicon-question-sign" aria-hidden="true" title="This is the local directory in which the code in this file was executed."> </span>
+</p>
+<p>
+This reproducible <a href="http://rmarkdown.rstudio.com">R Markdown</a> analysis was created with <a
+  href="https://github.com/jdblischak/workflowr">workflowr</a> (version 1.6.2). The <em>Checks</em> tab describes the reproducibility checks that were applied when the results were created. The <em>Past versions</em> tab lists the development history.
+</p>
+<hr>
+</div>
+<div id="checks" class="tab-pane fade">
+<div id="workflowr-checks" class="panel-group">
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date </a>
+</p>
+</div>
+<div id="strongRMarkdownfilestronguptodate" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great! Since the R Markdown file has been committed to the Git repository, you know the exact version of the code that produced these results.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongEnvironmentstrongempty"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Environment:</strong> empty </a>
+</p>
+</div>
+<div id="strongEnvironmentstrongempty" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! The global environment was empty. Objects defined in the global environment can affect the analysis in your R Markdown file in unknown ways. For reproduciblity it’s best to always run the code in an empty environment.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSeedstrongcodesetseed20210812code"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Seed:</strong> <code>set.seed(20210812)</code> </a>
+</p>
+</div>
+<div id="strongSeedstrongcodesetseed20210812code" class="panel-collapse collapse">
+<div class="panel-body">
+<p>The command <code>set.seed(20210812)</code> was run prior to running the code in the R Markdown file. Setting a seed ensures that any results that rely on randomness, e.g. subsampling or permutations, are reproducible.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSessioninformationstrongrecorded"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Session information:</strong> recorded </a>
+</p>
+</div>
+<div id="strongSessioninformationstrongrecorded" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Recording the operating system, R version, and package versions is critical for reproducibility.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Cache:</strong> none </a>
+</p>
+</div>
+<div id="strongCachestrongnone" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Nice! There were no cached chunks for this analysis, so you can be confident that you successfully produced the results during this run.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongFilepathsstrongrelative"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>File paths:</strong> relative </a>
+</p>
+</div>
+<div id="strongFilepathsstrongrelative" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Using relative paths to the files within your workflowr project makes it easier to run your code on other machines.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree4ad3d09f4f3c8726ea4637bf84fa3d0a16453fe8targetblank4ad3d09a"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/4ad3d09f4f3c8726ea4637bf84fa3d0a16453fe8" target="_blank">4ad3d09</a> </a>
+</p>
+</div>
+<div id="strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree4ad3d09f4f3c8726ea4637bf84fa3d0a16453fe8targetblank4ad3d09a" class="panel-collapse collapse">
+<div class="panel-body">
+<p>
+Great! You are using Git for version control. Tracking code development and connecting the code version to the results is critical for reproducibility.
+</p>
+<p>
+The results in this page were generated with repository version <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/4ad3d09f4f3c8726ea4637bf84fa3d0a16453fe8" target="_blank">4ad3d09</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
+</p>
+<p>
+Note that you need to be careful to ensure that all relevant files for the analysis have been committed to Git prior to generating the results (you can use <code>wflow_publish</code> or <code>wflow_git_commit</code>). workflowr only checks the R Markdown file, but you know if there are other scripts or data files that it depends on. Below is the status of the Git repository when the results were generated:
+</p>
+<pre><code>
+Ignored files:
+    Ignored:    .Rhistory
+    Ignored:    .Rproj.user/
+
+Untracked files:
+    Untracked:  analysis/data-index2.Rmd
+    Untracked:  data/bulk4_counts.rda
+    Untracked:  data/bulk4_dds.rda
+    Untracked:  data/paper_palette.rda
+    Untracked:  data/signatures.rda
+    Untracked:  docs2/
+    Untracked:  output/figures/ExtFig5a_pca_3patients.pdf
+    Untracked:  output/figures/ExtFig5b_pca_treatment_response.pdf
+    Untracked:  output/tables/ExtFig5a_bulkRNAseq_data.xlsx
+    Untracked:  output/tables/ExtFig5b_bulkRNAseq_data.xlsx
+
+Unstaged changes:
+    Modified:   bulkRNA/bulk-deseq2.Rmd
+
+</code></pre>
+<p>
+Note that any generated files, e.g. HTML, png, CSS, etc., are not included in this status report because it is ok for generated content to have uncommitted changes.
+</p>
+</div>
+</div>
+</div>
+</div>
+<hr>
+</div>
+<div id="versions" class="tab-pane fade">
+
+<p>
+These are the previous versions of the repository in which changes were made to the R Markdown (<code>analysis/data-ancillary.Rmd</code>) and HTML (<code>docs/data-ancillary.html</code>) files. If you’ve configured a remote Git repository (see <code>?wflow_git_remote</code>), click on the hyperlinks in the table below to view the files as they were in that past version.
+</p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/blob/4ad3d09f4f3c8726ea4637bf84fa3d0a16453fe8/analysis/data-ancillary.Rmd" target="_blank">4ad3d09</a>
+</td>
+<td>
+Javier Herrero
+</td>
+<td>
+2021-08-13
+</td>
+<td>
+Adding the “Data / Ancillary” page
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</div>
+</div>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># knitr::opts_chunk$set(cache = T, autodep = T)</span>
+
+<span class="kw">library</span>(tidyverse)
+<span class="kw">library</span>(DT)</code></pre></div>
+<div id="signatures-and-gene-sets" class="section level2">
+<h2>Signatures and gene sets</h2>
+<p>Several signatures/gene sets are used in this analysis.</p>
+<ul>
+<li><p><strong>MSigDB</strong>: all signatures have been downloaded using the <code>msigdbr</code> package.</p></li>
+<li><p><strong>Lineage signatures</strong>: from Laurenti et al (ProB, MLP, MEP, HSC, GMP, ETP, EarlyB, CMP)</p></li>
+<li><p><strong>Cell state</strong>: from Tirosh et al (Tirosh_G1_S, Tirosh_G2_M, TIROSH_Stemness)</p></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">msigdbr_full_signatures_table &lt;-<span class="st"> </span>msigdbr<span class="op">::</span><span class="kw">msigdbr</span>(<span class="st">&quot;Homo sapiens&quot;</span>)
+
+groups &lt;-<span class="st"> </span>msigdbr_full_signatures_table <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">group_by</span>(gs_cat, gs_subcat) <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">summarise</span>(<span class="dt">n =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">name =</span> <span class="kw">ifelse</span>(gs_subcat <span class="op">!=</span><span class="st"> &quot;&quot;</span>, <span class="kw">paste0</span>(gs_cat, <span class="st">&quot;-&quot;</span>, gs_subcat), gs_cat))</code></pre></div>
+<pre><code>`summarise()` regrouping output by &#39;gs_cat&#39; (override with `.groups` argument)</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">signatures &lt;-<span class="st"> </span><span class="kw">list</span>()
+sink &lt;-<span class="st"> </span>groups <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">apply</span>(<span class="dv">1</span>, <span class="cf">function</span>(x) {
+  signatures[[x[<span class="st">&quot;name&quot;</span>]]] &lt;&lt;-<span class="st"> </span>msigdbr_full_signatures_table <span class="op">%&gt;%</span>
+<span class="st">    </span><span class="kw">filter</span>(gs_cat <span class="op">==</span><span class="st"> </span>x[<span class="st">&quot;gs_cat&quot;</span>] <span class="op">&amp;</span><span class="st"> </span>gs_subcat <span class="op">==</span><span class="st"> </span>x[<span class="st">&quot;gs_subcat&quot;</span>]) <span class="op">%&gt;%</span>
+<span class="st">    </span><span class="kw">split</span>(<span class="dt">x =</span> .<span class="op">$</span>gene_symbol, <span class="dt">f =</span> .<span class="op">$</span>gs_name)
+  })
+
+<span class="co"># This table is available from Laurenti et al.</span>
+laurenti_signatures &lt;-<span class="st"> </span><span class="kw">read.table</span>(<span class="st">&quot;data-raw/PopSpecificSignatures_250.gmx&quot;</span>, <span class="dt">header =</span> T)
+
+sink &lt;-<span class="st"> </span><span class="kw">lapply</span>(<span class="kw">colnames</span>(laurenti_signatures), <span class="cf">function</span>(x) {
+  signatures[[<span class="st">&quot;lineages&quot;</span>]][[x]] &lt;&lt;-<span class="st"> </span><span class="kw">as.character</span>(laurenti_signatures[, x])
+  })
+
+<span class="co"># This table was extracted from Tirosh et al.</span>
+cell_state_signatures &lt;-<span class="st"> </span>fgsea<span class="op">::</span><span class="kw">gmtPathways</span>(<span class="st">&quot;data-raw/cell_state.gmt&quot;</span>)
+
+sink &lt;-<span class="st"> </span><span class="kw">lapply</span>(<span class="kw">names</span>(cell_state_signatures), <span class="cf">function</span>(x) {
+  signatures[[<span class="st">&quot;cell_state&quot;</span>]][[x]] &lt;&lt;-<span class="st"> </span><span class="kw">as.character</span>(cell_state_signatures[[x]])
+  })
+
+
+usethis<span class="op">::</span><span class="kw">use_directory</span>(<span class="st">&quot;data&quot;</span>)</code></pre></div>
+<pre><code>✓ Setting active project to &#39;/Users/javier/Projects/Turati_NatCancer_2021&#39;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">save</span>(signatures, <span class="dt">file =</span> <span class="st">&quot;data/signatures.rda&quot;</span>)</code></pre></div>
+<p>Here is a list of the different signature sets:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">enframe</span>(<span class="kw">sapply</span>(signatures, length), <span class="dt">name =</span> <span class="st">&quot;set&quot;</span>, <span class="st">&quot;number&quot;</span>) <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">left_join</span>(<span class="kw">enframe</span>(<span class="kw">sapply</span>(signatures, <span class="cf">function</span>(x) {
+    num &lt;-<span class="st"> </span><span class="kw">length</span>(x)
+    <span class="cf">if</span> (num <span class="op">&gt;</span><span class="st"> </span><span class="dv">10</span>) {
+      names &lt;-<span class="st"> </span><span class="kw">paste</span>(<span class="kw">c</span>(<span class="kw">names</span>(x)[<span class="dv">1</span><span class="op">:</span><span class="dv">10</span>], <span class="st">&quot;...&quot;</span>), <span class="dt">collapse =</span> <span class="st">&quot;,&quot;</span>)
+    } <span class="cf">else</span> {
+      names &lt;-<span class="st"> </span><span class="kw">paste</span>(<span class="kw">names</span>(x), <span class="dt">collapse =</span> <span class="st">&quot;,&quot;</span>)
+    }
+    <span class="kw">return</span>(names)
+    }), <span class="dt">name =</span> <span class="st">&quot;set&quot;</span>, <span class="st">&quot;signatures&quot;</span>), <span class="dt">by =</span> <span class="st">&quot;set&quot;</span>) <span class="op">%&gt;%</span>
+<span class="st">  </span>DT<span class="op">::</span><span class="kw">datatable</span>()</code></pre></div>
+<div id="htmlwidget-698a264bda586363c853" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-698a264bda586363c853">{"x":{"filter":"none","data":[["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19"],["C1","C2-CGP","C2-CP","C2-CP:BIOCARTA","C2-CP:KEGG","C2-CP:PID","C2-CP:REACTOME","C3-MIR","C3-TFT","C4-CGN","C4-CM","C5-BP","C5-CC","C5-MF","C6","C7","H","lineages","cell_state"],[299,3302,29,289,186,196,1499,221,610,427,431,7350,1001,1645,189,4872,50,8,3],["chr10p11,chr10p12,chr10p13,chr10p14,chr10p15,chr10q11,chr10q21,chr10q22,chr10q23,chr10q24,...","ABBUD_LIF_SIGNALING_1_DN,ABBUD_LIF_SIGNALING_1_UP,ABBUD_LIF_SIGNALING_2_DN,ABBUD_LIF_SIGNALING_2_UP,ABDELMOHSEN_ELAVL4_TARGETS,ABDULRAHMAN_KIDNEY_CANCER_VHL_DN,ABE_INNER_EAR,ABE_VEGFA_TARGETS,ABE_VEGFA_TARGETS_2HR,ABE_VEGFA_TARGETS_30MIN,...","NABA_BASEMENT_MEMBRANES,NABA_COLLAGENS,NABA_CORE_MATRISOME,NABA_ECM_AFFILIATED,NABA_ECM_GLYCOPROTEINS,NABA_ECM_REGULATORS,NABA_MATRISOME,NABA_MATRISOME_ASSOCIATED,NABA_PROTEOGLYCANS,NABA_SECRETED_FACTORS,...","BIOCARTA_41BB_PATHWAY,BIOCARTA_ACE2_PATHWAY,BIOCARTA_ACETAMINOPHEN_PATHWAY,BIOCARTA_ACH_PATHWAY,BIOCARTA_ACTINY_PATHWAY,BIOCARTA_AGPCR_PATHWAY,BIOCARTA_AGR_PATHWAY,BIOCARTA_AHSP_PATHWAY,BIOCARTA_AKAP13_PATHWAY,BIOCARTA_AKAP95_PATHWAY,...","KEGG_ABC_TRANSPORTERS,KEGG_ACUTE_MYELOID_LEUKEMIA,KEGG_ADHERENS_JUNCTION,KEGG_ADIPOCYTOKINE_SIGNALING_PATHWAY,KEGG_ALANINE_ASPARTATE_AND_GLUTAMATE_METABOLISM,KEGG_ALDOSTERONE_REGULATED_SODIUM_REABSORPTION,KEGG_ALLOGRAFT_REJECTION,KEGG_ALPHA_LINOLENIC_ACID_METABOLISM,KEGG_ALZHEIMERS_DISEASE,KEGG_AMINO_SUGAR_AND_NUCLEOTIDE_SUGAR_METABOLISM,...","PID_A6B1_A6B4_INTEGRIN_PATHWAY,PID_AJDISS_2PATHWAY,PID_ALK1_PATHWAY,PID_ALK2_PATHWAY,PID_ALPHA_SYNUCLEIN_PATHWAY,PID_AMB2_NEUTROPHILS_PATHWAY,PID_ANGIOPOIETIN_RECEPTOR_PATHWAY,PID_ANTHRAX_PATHWAY,PID_AP1_PATHWAY,PID_AR_NONGENOMIC_PATHWAY,...","REACTOME_2_LTR_CIRCLE_FORMATION,REACTOME_A_TETRASACCHARIDE_LINKER_SEQUENCE_IS_REQUIRED_FOR_GAG_SYNTHESIS,REACTOME_ABACAVIR_METABOLISM,REACTOME_ABACAVIR_TRANSMEMBRANE_TRANSPORT,REACTOME_ABACAVIR_TRANSPORT_AND_METABOLISM,REACTOME_ABC_FAMILY_PROTEINS_MEDIATED_TRANSPORT,REACTOME_ABC_TRANSPORTER_DISORDERS,REACTOME_ABC_TRANSPORTERS_IN_LIPID_HOMEOSTASIS,REACTOME_ABORTIVE_ELONGATION_OF_HIV_1_TRANSCRIPT_IN_THE_ABSENCE_OF_TAT,REACTOME_ACETYLCHOLINE_BINDING_AND_DOWNSTREAM_EVENTS,...","AAACCAC_MIR140,AAAGACA_MIR511,AAAGGAT_MIR501,AAAGGGA_MIR204_MIR211,AACATTC_MIR4093P,AACGGTT_MIR451,AACTGAC_MIR223,AACTGGA_MIR145,AAGCAAT_MIR137,AAGCACA_MIR218,...","AAANWWTGC_UNKNOWN,AAAYRNCTG_UNKNOWN,AAAYWAACM_HFH4_01,AACTTT_UNKNOWN,AACWWCAANK_UNKNOWN,AACYNNNNTTCCS_UNKNOWN,AAGWWRNYGGC_UNKNOWN,ACAWNRNSRCGG_UNKNOWN,ACAWYAAAG_UNKNOWN,ACCTGTTG_UNKNOWN,...","CAR_HPX,CAR_IGFBP1,CAR_MLANA,CAR_MYST2,CAR_TNFRSF25,CAR_WBSCR22,GCM_ACTG1,GCM_AIP,GCM_ANP32B,GCM_APEX1,...","MODULE_1,MODULE_100,MODULE_101,MODULE_102,MODULE_103,MODULE_104,MODULE_105,MODULE_106,MODULE_107,MODULE_108,...","GO_2_OXOGLUTARATE_METABOLIC_PROCESS,GO_2FE_2S_CLUSTER_ASSEMBLY,GO_3_PHOSPHOADENOSINE_5_PHOSPHOSULFATE_BIOSYNTHETIC_PROCESS,GO_3_PHOSPHOADENOSINE_5_PHOSPHOSULFATE_METABOLIC_PROCESS,GO_3_UTR_MEDIATED_MRNA_DESTABILIZATION,GO_3_UTR_MEDIATED_MRNA_STABILIZATION,GO_4_HYDROXYPROLINE_METABOLIC_PROCESS,GO_5_PHOSPHORIBOSE_1_DIPHOSPHATE_BIOSYNTHETIC_PROCESS,GO_ABSCISSION,GO_ACETATE_ESTER_TRANSPORT,...","GO_3M_COMPLEX,GO_90S_PRERIBOSOME,GO_9PLUS0_NON_MOTILE_CILIUM,GO_9PLUS2_MOTILE_CILIUM,GO_A_BAND,GO_ACETYLCHOLINE_GATED_CHANNEL_COMPLEX,GO_ACROSOMAL_MEMBRANE,GO_ACROSOMAL_VESICLE,GO_ACTIN_BASED_CELL_PROJECTION,GO_ACTIN_CORTICAL_PATCH,...","GO_1_ACYLGLYCEROPHOSPHOCHOLINE_O_ACYLTRANSFERASE_ACTIVITY,GO_1_ALKYL_2_ACETYLGLYCEROPHOSPHOCHOLINE_ESTERASE_ACTIVITY,GO_1_PHOSPHATIDYLINOSITOL_3_KINASE_REGULATOR_ACTIVITY,GO_1_PHOSPHATIDYLINOSITOL_4_KINASE_ACTIVITY,GO_1_PHOSPHATIDYLINOSITOL_4_PHOSPHATE_3_KINASE_ACTIVITY,GO_1_PHOSPHATIDYLINOSITOL_4_PHOSPHATE_5_KINASE_ACTIVITY,GO_1_PHOSPHATIDYLINOSITOL_BINDING,GO_11_CIS_RETINAL_BINDING,GO_14_3_3_PROTEIN_BINDING,GO_2_ACYLGLYCEROL_O_ACYLTRANSFERASE_ACTIVITY,...","AKT_UP_MTOR_DN.V1_DN,AKT_UP_MTOR_DN.V1_UP,AKT_UP.V1_DN,AKT_UP.V1_UP,ALK_DN.V1_DN,ALK_DN.V1_UP,ATF2_S_UP.V1_DN,ATF2_S_UP.V1_UP,ATF2_UP.V1_DN,ATF2_UP.V1_UP,...","GOLDRATH_EFF_VS_MEMORY_CD8_TCELL_DN,GOLDRATH_EFF_VS_MEMORY_CD8_TCELL_UP,GOLDRATH_NAIVE_VS_EFF_CD8_TCELL_DN,GOLDRATH_NAIVE_VS_EFF_CD8_TCELL_UP,GOLDRATH_NAIVE_VS_MEMORY_CD8_TCELL_DN,GOLDRATH_NAIVE_VS_MEMORY_CD8_TCELL_UP,GSE10094_LCMV_VS_LISTERIA_IND_EFF_CD4_TCELL_DN,GSE10094_LCMV_VS_LISTERIA_IND_EFF_CD4_TCELL_UP,GSE10147_IL3_AND_HIVP17_VS_IL3_AND_CPG_STIM_PDC_DN,GSE10147_IL3_AND_HIVP17_VS_IL3_AND_CPG_STIM_PDC_UP,...","HALLMARK_ADIPOGENESIS,HALLMARK_ALLOGRAFT_REJECTION,HALLMARK_ANDROGEN_RESPONSE,HALLMARK_ANGIOGENESIS,HALLMARK_APICAL_JUNCTION,HALLMARK_APICAL_SURFACE,HALLMARK_APOPTOSIS,HALLMARK_BILE_ACID_METABOLISM,HALLMARK_CHOLESTEROL_HOMEOSTASIS,HALLMARK_COAGULATION,...","ProB,MLP,MEP,HSC,GMP,ETP,EarlyB,CMP","TIROSH_G1_S,TIROSH_G2_M,TIROSH_Stemness"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>set<\/th>\n      <th>number<\/th>\n      <th>signatures<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"className":"dt-right","targets":2},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<p>To use the signatures, simply do:</p>
+<pre><code>data(&quot;signatures&quot;)
+
+hallmarks &lt;- signatures[[&quot;H&quot;]]
+lineages &lt;- signatures[[&quot;lineages&quot;]]
+cell_cycle_genes &lt;- signatures[[&quot;lineages&quot;]][[&quot;GO_CELL_CYCLE&quot;]]
+
+# Combinations
+pathways &lt;- c(signatures[[&quot;lineages&quot;]], signatures[[&quot;H&quot;]])
+names(pathways) &lt;- gsub(&quot;HALLMARK_&quot;, &quot;&quot;, names(pathways))</code></pre>
+</div>
+<div id="paper-palette" class="section level2">
+<h2>Paper Palette</h2>
+<p>To use the paper palette with ggplot2, simply do:</p>
+<pre><code>data(&quot;paper_palette&quot;)
+
+ggplot() +
+  ... +
+  scale_fill_manual(values = paper_palette) +
+  ...</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">paper_palette &lt;-<span class="st"> </span><span class="kw">c</span>(
+  ## Bulk treated
+  <span class="st">&quot;BulkChemotherapy&quot;</span> =<span class="st"> &quot;#AF4FAF&quot;</span>,
+  <span class="st">&quot;Chemotherapy&quot;</span> =<span class="st"> &quot;#AF4FAF&quot;</span>,
+  <span class="st">&quot;Treated&quot;</span> =<span class="st"> &quot;#AF4FAF&quot;</span>,
+  
+  ## Bulk relapse (240, 146, 242)
+  <span class="st">&quot;BulkRelapse&quot;</span> =<span class="st"> &quot;#F092F2&quot;</span>,
+  <span class="st">&quot;Relapse&quot;</span> =<span class="st"> &quot;#F092F2&quot;</span>,
+  
+  ## Bulk untreated (for simple)
+  <span class="st">&quot;BulkUntreated&quot;</span> =<span class="st"> &quot;#43B0E3&quot;</span>,
+  <span class="st">&quot;Untreated&quot;</span> =<span class="st"> &quot;#43B0E3&quot;</span>,
+
+  ## Diagnosis
+  <span class="st">&quot;Diagnosis&quot;</span> =<span class="st"> &quot;#E38522&quot;</span>,
+  <span class="st">&quot;MRD&quot;</span> =<span class="st"> &quot;#30AF30&quot;</span>,
+
+  ## PRS
+  <span class="st">&quot;PRS&quot;</span> =<span class="st"> &quot;#307F7F&quot;</span>,
+  
+  ## Cell cycle: deep quiescent
+  <span class="st">&quot;Deep&quot;</span> =<span class="st"> &quot;#959867&quot;</span>,
+  <span class="st">&quot;DeepQ&quot;</span> =<span class="st"> &quot;#959867&quot;</span>,
+  
+  ## Cell cycle: shallow quiescent
+  <span class="st">&quot;Shallow&quot;</span> =<span class="st"> &quot;#94BE69&quot;</span>,
+  <span class="st">&quot;ShallowQ&quot;</span> =<span class="st"> &quot;#94BE69&quot;</span>,
+  
+  ## Cell cycle: cycling
+  <span class="st">&quot;Cycling&quot;</span> =<span class="st"> &quot;#CA4B1F&quot;</span>,
+  <span class="st">&quot;Cycling&quot;</span> =<span class="st"> &quot;#CA4B1F&quot;</span>,
+  
+  ## Bulk headache: T/T (231, 119, 108)
+  <span class="st">&quot;chem-chem&quot;</span> =<span class="st"> &quot;#E7776C&quot;</span>,
+  <span class="st">&quot;Chronically treated&quot;</span> =<span class="st"> &quot;#E7776C&quot;</span>,
+  
+  ## Bulk headache: T/U
+  <span class="st">&quot;chem-nochem&quot;</span> =<span class="st"> &quot;#A1A22C&quot;</span>,
+  <span class="st">&quot;Treatment Withdrawn&quot;</span> =<span class="st"> &quot;#A1A22C&quot;</span>,
+  <span class="st">&quot;Treatment withdrawn&quot;</span> =<span class="st"> &quot;#A1A22C&quot;</span>,
+  
+  ## Bulk headache: U/T
+  <span class="st">&quot;nochem-chem&quot;</span> =<span class="st"> &quot;#55B583&quot;</span>,
+  <span class="st">&quot;Acutely treated&quot;</span> =<span class="st"> &quot;#55B583&quot;</span>,
+  
+  ## Bulk headache: U/U
+  <span class="st">&quot;nochem-nochem&quot;</span> =<span class="st"> &quot;#0416C8&quot;</span>,
+  <span class="st">&quot;Untreated&quot;</span> =<span class="st"> &quot;#0416C8&quot;</span>,
+  <span class="st">&quot;Never treated&quot;</span> =<span class="st"> &quot;#0416C8&quot;</span>,
+
+  ## Lineages
+  <span class="st">&quot;ProB&quot;</span> =<span class="st"> &quot;#AF4AFF&quot;</span>,
+  <span class="st">&quot;MLP&quot;</span> =<span class="st"> &quot;#797FF4&quot;</span>,
+  <span class="st">&quot;MEP&quot;</span> =<span class="st"> &quot;#44B4FF&quot;</span>,
+  <span class="st">&quot;HSC&quot;</span> =<span class="st"> &quot;#4BD6B3&quot;</span>,
+  <span class="st">&quot;GMP&quot;</span> =<span class="st"> &quot;#67F16C&quot;</span>,
+  <span class="st">&quot;ETP&quot;</span> =<span class="st"> &quot;#97A645&quot;</span>,
+  <span class="st">&quot;EarlyB&quot;</span> =<span class="st"> &quot;#CCB43D&quot;</span>,
+  <span class="st">&quot;CMP&quot;</span> =<span class="st"> &quot;#F88134&quot;</span>,
+  <span class="st">&quot;pre-BII&quot;</span> =<span class="st"> &quot;#FF4C24&quot;</span>,
+  <span class="st">&quot;pre-BI&quot;</span> =<span class="st"> &quot;#AB0300&quot;</span>,
+  
+  ## Yes/No
+  <span class="st">&quot;Yes&quot;</span>=<span class="st"> &quot;#307F7F&quot;</span>,
+  <span class="st">&quot;No&quot;</span> =<span class="st"> &quot;#B4B4B4&quot;</span>)
+
+usethis<span class="op">::</span><span class="kw">use_directory</span>(<span class="st">&quot;data&quot;</span>)
+<span class="kw">save</span>(paper_palette, <span class="dt">file =</span> <span class="st">&quot;data/paper_palette.rda&quot;</span>)</code></pre></div>
+<br>
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-sessioninfo" data-toggle="collapse" data-target="#workflowr-sessioninfo" style="display: block;">
+<span class="glyphicon glyphicon-wrench" aria-hidden="true"></span> Session information
+</button>
+</p>
+<div id="workflowr-sessioninfo" class="collapse">
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">sessionInfo</span>()</code></pre></div>
+<pre><code>R version 3.6.3 (2020-02-29)
+Platform: x86_64-apple-darwin15.6.0 (64-bit)
+Running under: macOS Catalina 10.15.7
+
+Matrix products: default
+BLAS:   /Library/Frameworks/R.framework/Versions/3.6/Resources/lib/libRblas.0.dylib
+LAPACK: /Library/Frameworks/R.framework/Versions/3.6/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_GB.UTF-8/en_GB.UTF-8/en_GB.UTF-8/C/en_GB.UTF-8/en_GB.UTF-8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] DT_0.13         forcats_0.5.0   stringr_1.4.0   dplyr_1.0.0    
+ [5] purrr_0.3.3     readr_1.3.1     tidyr_1.0.2     tibble_2.1.3   
+ [9] ggplot2_3.3.1   tidyverse_1.3.0
+
+loaded via a namespace (and not attached):
+ [1] Rcpp_1.0.4          lubridate_1.7.4     lattice_0.20-40    
+ [4] assertthat_0.2.1    rprojroot_1.3-2     digest_0.6.25      
+ [7] R6_2.4.1            cellranger_1.1.0    backports_1.1.5    
+[10] reprex_0.3.0        evaluate_0.14       httr_1.4.1         
+[13] pillar_1.4.3        rlang_0.4.11        readxl_1.3.1       
+[16] rstudioapi_0.11     data.table_1.12.8   whisker_0.4        
+[19] Matrix_1.2-18       rmarkdown_2.1       BiocParallel_1.20.1
+[22] htmlwidgets_1.5.1   munsell_0.5.0       broom_0.5.5        
+[25] fgsea_1.12.0        compiler_3.6.3      httpuv_1.5.2       
+[28] modelr_0.1.6        xfun_0.16           pkgconfig_2.0.3    
+[31] base64enc_0.1-3     htmltools_0.5.1.1   tidyselect_1.1.0   
+[34] gridExtra_2.3       workflowr_1.6.2     crayon_1.3.4       
+[37] dbplyr_1.4.2        withr_2.4.2         later_1.0.0        
+[40] grid_3.6.3          nlme_3.1-145        jsonlite_1.6.1     
+[43] gtable_0.3.0        lifecycle_0.2.0     DBI_1.1.0          
+[46] git2r_0.26.1        magrittr_1.5        scales_1.1.0       
+[49] cli_3.0.0           stringi_1.4.6       msigdbr_7.0.1      
+[52] fs_1.3.2            promises_1.1.0      xml2_1.2.5         
+[55] ellipsis_0.3.0      generics_0.0.2      vctrs_0.3.0        
+[58] fastmatch_1.1-0     tools_3.6.3         glue_1.3.2         
+[61] crosstalk_1.1.0.1   hms_0.5.3           parallel_3.6.3     
+[64] yaml_2.2.1          colorspace_1.4-1    rvest_0.3.5        
+[67] knitr_1.28          haven_2.2.0         usethis_2.0.1      </code></pre>
+</div>
+</div>
+
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiQW5jaWxsYXJ5IERhdGEiCm91dHB1dDogd29ya2Zsb3dyOjp3Zmxvd19odG1sCmVkaXRvcl9vcHRpb25zOgogIGNodW5rX291dHB1dF90eXBlOiBjb25zb2xlCi0tLQoKYGBge3Igc2V0dXAsIHdhcm5pbmcgPSBGQUxTRSwgbWVzc2FnZSA9IEZBTFNFfQojIGtuaXRyOjpvcHRzX2NodW5rJHNldChjYWNoZSA9IFQsIGF1dG9kZXAgPSBUKQoKbGlicmFyeSh0aWR5dmVyc2UpCmxpYnJhcnkoRFQpCmBgYAoKIyMgU2lnbmF0dXJlcyBhbmQgZ2VuZSBzZXRzCgpTZXZlcmFsIHNpZ25hdHVyZXMvZ2VuZSBzZXRzIGFyZSB1c2VkIGluIHRoaXMgYW5hbHlzaXMuCgoqICoqTVNpZ0RCKio6IGFsbCBzaWduYXR1cmVzIGhhdmUgYmVlbiBkb3dubG9hZGVkIHVzaW5nIHRoZSBgbXNpZ2RicmAgcGFja2FnZS4KCiogKipMaW5lYWdlIHNpZ25hdHVyZXMqKjogZnJvbSBMYXVyZW50aSBldCBhbCAoUHJvQiwgTUxQLCBNRVAsIEhTQywgR01QLCBFVFAsIEVhcmx5QiwgQ01QKQoKKiAqKkNlbGwgc3RhdGUqKjogZnJvbSBUaXJvc2ggZXQgYWwgKFRpcm9zaF9HMV9TLCBUaXJvc2hfRzJfTSwgVElST1NIX1N0ZW1uZXNzKQoKCmBgYHtyfQptc2lnZGJyX2Z1bGxfc2lnbmF0dXJlc190YWJsZSA8LSBtc2lnZGJyOjptc2lnZGJyKCJIb21vIHNhcGllbnMiKQoKZ3JvdXBzIDwtIG1zaWdkYnJfZnVsbF9zaWduYXR1cmVzX3RhYmxlICU+JQogIGdyb3VwX2J5KGdzX2NhdCwgZ3Nfc3ViY2F0KSAlPiUKICBzdW1tYXJpc2UobiA9IG4oKSkgJT4lCiAgbXV0YXRlKG5hbWUgPSBpZmVsc2UoZ3Nfc3ViY2F0ICE9ICIiLCBwYXN0ZTAoZ3NfY2F0LCAiLSIsIGdzX3N1YmNhdCksIGdzX2NhdCkpCgpzaWduYXR1cmVzIDwtIGxpc3QoKQpzaW5rIDwtIGdyb3VwcyAlPiUgYXBwbHkoMSwgZnVuY3Rpb24oeCkgewogIHNpZ25hdHVyZXNbW3hbIm5hbWUiXV1dIDw8LSBtc2lnZGJyX2Z1bGxfc2lnbmF0dXJlc190YWJsZSAlPiUKICAgIGZpbHRlcihnc19jYXQgPT0geFsiZ3NfY2F0Il0gJiBnc19zdWJjYXQgPT0geFsiZ3Nfc3ViY2F0Il0pICU+JQogICAgc3BsaXQoeCA9IC4kZ2VuZV9zeW1ib2wsIGYgPSAuJGdzX25hbWUpCiAgfSkKCiMgVGhpcyB0YWJsZSBpcyBhdmFpbGFibGUgZnJvbSBMYXVyZW50aSBldCBhbC4KbGF1cmVudGlfc2lnbmF0dXJlcyA8LSByZWFkLnRhYmxlKCJkYXRhLXJhdy9Qb3BTcGVjaWZpY1NpZ25hdHVyZXNfMjUwLmdteCIsIGhlYWRlciA9IFQpCgpzaW5rIDwtIGxhcHBseShjb2xuYW1lcyhsYXVyZW50aV9zaWduYXR1cmVzKSwgZnVuY3Rpb24oeCkgewogIHNpZ25hdHVyZXNbWyJsaW5lYWdlcyJdXVtbeF1dIDw8LSBhcy5jaGFyYWN0ZXIobGF1cmVudGlfc2lnbmF0dXJlc1ssIHhdKQogIH0pCgojIFRoaXMgdGFibGUgd2FzIGV4dHJhY3RlZCBmcm9tIFRpcm9zaCBldCBhbC4KY2VsbF9zdGF0ZV9zaWduYXR1cmVzIDwtIGZnc2VhOjpnbXRQYXRod2F5cygiZGF0YS1yYXcvY2VsbF9zdGF0ZS5nbXQiKQoKc2luayA8LSBsYXBwbHkobmFtZXMoY2VsbF9zdGF0ZV9zaWduYXR1cmVzKSwgZnVuY3Rpb24oeCkgewogIHNpZ25hdHVyZXNbWyJjZWxsX3N0YXRlIl1dW1t4XV0gPDwtIGFzLmNoYXJhY3RlcihjZWxsX3N0YXRlX3NpZ25hdHVyZXNbW3hdXSkKICB9KQoKCnVzZXRoaXM6OnVzZV9kaXJlY3RvcnkoImRhdGEiKQoKc2F2ZShzaWduYXR1cmVzLCBmaWxlID0gImRhdGEvc2lnbmF0dXJlcy5yZGEiKQpgYGAKCkhlcmUgaXMgYSBsaXN0IG9mIHRoZSBkaWZmZXJlbnQgc2lnbmF0dXJlIHNldHM6CgpgYGB7cn0KZW5mcmFtZShzYXBwbHkoc2lnbmF0dXJlcywgbGVuZ3RoKSwgbmFtZSA9ICJzZXQiLCAibnVtYmVyIikgJT4lCiAgbGVmdF9qb2luKGVuZnJhbWUoc2FwcGx5KHNpZ25hdHVyZXMsIGZ1bmN0aW9uKHgpIHsKICAgIG51bSA8LSBsZW5ndGgoeCkKICAgIGlmIChudW0gPiAxMCkgewogICAgICBuYW1lcyA8LSBwYXN0ZShjKG5hbWVzKHgpWzE6MTBdLCAiLi4uIiksIGNvbGxhcHNlID0gIiwiKQogICAgfSBlbHNlIHsKICAgICAgbmFtZXMgPC0gcGFzdGUobmFtZXMoeCksIGNvbGxhcHNlID0gIiwiKQogICAgfQogICAgcmV0dXJuKG5hbWVzKQogICAgfSksIG5hbWUgPSAic2V0IiwgInNpZ25hdHVyZXMiKSwgYnkgPSAic2V0IikgJT4lCiAgRFQ6OmRhdGF0YWJsZSgpCmBgYAoKVG8gdXNlIHRoZSBzaWduYXR1cmVzLCBzaW1wbHkgZG86CgpgYGAKZGF0YSgic2lnbmF0dXJlcyIpCgpoYWxsbWFya3MgPC0gc2lnbmF0dXJlc1tbIkgiXV0KbGluZWFnZXMgPC0gc2lnbmF0dXJlc1tbImxpbmVhZ2VzIl1dCmNlbGxfY3ljbGVfZ2VuZXMgPC0gc2lnbmF0dXJlc1tbImxpbmVhZ2VzIl1dW1siR09fQ0VMTF9DWUNMRSJdXQoKIyBDb21iaW5hdGlvbnMKcGF0aHdheXMgPC0gYyhzaWduYXR1cmVzW1sibGluZWFnZXMiXV0sIHNpZ25hdHVyZXNbWyJIIl1dKQpuYW1lcyhwYXRod2F5cykgPC0gZ3N1YigiSEFMTE1BUktfIiwgIiIsIG5hbWVzKHBhdGh3YXlzKSkKYGBgCgoKIyMgUGFwZXIgUGFsZXR0ZQoKVG8gdXNlIHRoZSBwYXBlciBwYWxldHRlIHdpdGggZ2dwbG90Miwgc2ltcGx5IGRvOgoKYGBgCmRhdGEoInBhcGVyX3BhbGV0dGUiKQoKZ2dwbG90KCkgKwogIC4uLiArCiAgc2NhbGVfZmlsbF9tYW51YWwodmFsdWVzID0gcGFwZXJfcGFsZXR0ZSkgKwogIC4uLgpgYGAKCmBgYHtyfQpwYXBlcl9wYWxldHRlIDwtIGMoCiAgIyMgQnVsayB0cmVhdGVkCiAgIkJ1bGtDaGVtb3RoZXJhcHkiID0gIiNBRjRGQUYiLAogICJDaGVtb3RoZXJhcHkiID0gIiNBRjRGQUYiLAogICJUcmVhdGVkIiA9ICIjQUY0RkFGIiwKICAKICAjIyBCdWxrIHJlbGFwc2UgKDI0MCwgMTQ2LCAyNDIpCiAgIkJ1bGtSZWxhcHNlIiA9ICIjRjA5MkYyIiwKICAiUmVsYXBzZSIgPSAiI0YwOTJGMiIsCiAgCiAgIyMgQnVsayB1bnRyZWF0ZWQgKGZvciBzaW1wbGUpCiAgIkJ1bGtVbnRyZWF0ZWQiID0gIiM0M0IwRTMiLAogICJVbnRyZWF0ZWQiID0gIiM0M0IwRTMiLAoKICAjIyBEaWFnbm9zaXMKICAiRGlhZ25vc2lzIiA9ICIjRTM4NTIyIiwKICAiTVJEIiA9ICIjMzBBRjMwIiwKCiAgIyMgUFJTCiAgIlBSUyIgPSAiIzMwN0Y3RiIsCiAgCiAgIyMgQ2VsbCBjeWNsZTogZGVlcCBxdWllc2NlbnQKICAiRGVlcCIgPSAiIzk1OTg2NyIsCiAgIkRlZXBRIiA9ICIjOTU5ODY3IiwKICAKICAjIyBDZWxsIGN5Y2xlOiBzaGFsbG93IHF1aWVzY2VudAogICJTaGFsbG93IiA9ICIjOTRCRTY5IiwKICAiU2hhbGxvd1EiID0gIiM5NEJFNjkiLAogIAogICMjIENlbGwgY3ljbGU6IGN5Y2xpbmcKICAiQ3ljbGluZyIgPSAiI0NBNEIxRiIsCiAgIkN5Y2xpbmciID0gIiNDQTRCMUYiLAogIAogICMjIEJ1bGsgaGVhZGFjaGU6IFQvVCAoMjMxLCAxMTksIDEwOCkKICAiY2hlbS1jaGVtIiA9ICIjRTc3NzZDIiwKICAiQ2hyb25pY2FsbHkgdHJlYXRlZCIgPSAiI0U3Nzc2QyIsCiAgCiAgIyMgQnVsayBoZWFkYWNoZTogVC9VCiAgImNoZW0tbm9jaGVtIiA9ICIjQTFBMjJDIiwKICAiVHJlYXRtZW50IFdpdGhkcmF3biIgPSAiI0ExQTIyQyIsCiAgIlRyZWF0bWVudCB3aXRoZHJhd24iID0gIiNBMUEyMkMiLAogIAogICMjIEJ1bGsgaGVhZGFjaGU6IFUvVAogICJub2NoZW0tY2hlbSIgPSAiIzU1QjU4MyIsCiAgIkFjdXRlbHkgdHJlYXRlZCIgPSAiIzU1QjU4MyIsCiAgCiAgIyMgQnVsayBoZWFkYWNoZTogVS9VCiAgIm5vY2hlbS1ub2NoZW0iID0gIiMwNDE2QzgiLAogICJVbnRyZWF0ZWQiID0gIiMwNDE2QzgiLAogICJOZXZlciB0cmVhdGVkIiA9ICIjMDQxNkM4IiwKCiAgIyMgTGluZWFnZXMKICAiUHJvQiIgPSAiI0FGNEFGRiIsCiAgIk1MUCIgPSAiIzc5N0ZGNCIsCiAgIk1FUCIgPSAiIzQ0QjRGRiIsCiAgIkhTQyIgPSAiIzRCRDZCMyIsCiAgIkdNUCIgPSAiIzY3RjE2QyIsCiAgIkVUUCIgPSAiIzk3QTY0NSIsCiAgIkVhcmx5QiIgPSAiI0NDQjQzRCIsCiAgIkNNUCIgPSAiI0Y4ODEzNCIsCiAgInByZS1CSUkiID0gIiNGRjRDMjQiLAogICJwcmUtQkkiID0gIiNBQjAzMDAiLAogIAogICMjIFllcy9ObwogICJZZXMiPSAiIzMwN0Y3RiIsCiAgIk5vIiA9ICIjQjRCNEI0IikKCnVzZXRoaXM6OnVzZV9kaXJlY3RvcnkoImRhdGEiKQpzYXZlKHBhcGVyX3BhbGV0dGUsIGZpbGUgPSAiZGF0YS9wYXBlcl9wYWxldHRlLnJkYSIpCmBgYAoK</div>
+
+<!-- Adjust MathJax settings so that all math formulae are shown using
+TeX fonts only; see
+http://docs.mathjax.org/en/latest/configuration.html.  This will make
+the presentation more consistent at the cost of the webpage sometimes
+taking slightly longer to load. Note that this only works because the
+footer is added to webpages before the MathJax javascript. -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+
+<!-- code folding -->
+<script>
+$(document).ready(function () {
+  window.initializeSourceEmbed("data-ancillary.Rmd");
+  window.initializeCodeFolding("hide" === "show");
+});
+</script>
+
+<script>
+$(document).ready(function ()  {
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_').toLowerCase();
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

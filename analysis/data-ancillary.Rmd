@@ -1,0 +1,176 @@
+---
+title: "Ancillary Data"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, warning = FALSE, message = FALSE}
+# knitr::opts_chunk$set(cache = T, autodep = T)
+
+library(tidyverse)
+library(DT)
+```
+
+## Signatures and gene sets
+
+Several signatures/gene sets are used in this analysis.
+
+* **MSigDB**: all signatures have been downloaded using the `msigdbr` package.
+
+* **Lineage signatures**: from Laurenti et al (ProB, MLP, MEP, HSC, GMP, ETP, EarlyB, CMP)
+
+* **Cell state**: from Tirosh et al (Tirosh_G1_S, Tirosh_G2_M, TIROSH_Stemness)
+
+
+```{r}
+msigdbr_full_signatures_table <- msigdbr::msigdbr("Homo sapiens")
+
+groups <- msigdbr_full_signatures_table %>%
+  group_by(gs_cat, gs_subcat) %>%
+  summarise(n = n()) %>%
+  mutate(name = ifelse(gs_subcat != "", paste0(gs_cat, "-", gs_subcat), gs_cat))
+
+signatures <- list()
+sink <- groups %>% apply(1, function(x) {
+  signatures[[x["name"]]] <<- msigdbr_full_signatures_table %>%
+    filter(gs_cat == x["gs_cat"] & gs_subcat == x["gs_subcat"]) %>%
+    split(x = .$gene_symbol, f = .$gs_name)
+  })
+
+# This table is available from Laurenti et al.
+laurenti_signatures <- read.table("data-raw/PopSpecificSignatures_250.gmx", header = T)
+
+sink <- lapply(colnames(laurenti_signatures), function(x) {
+  signatures[["lineages"]][[x]] <<- as.character(laurenti_signatures[, x])
+  })
+
+# This table was extracted from Tirosh et al.
+cell_state_signatures <- fgsea::gmtPathways("data-raw/cell_state.gmt")
+
+sink <- lapply(names(cell_state_signatures), function(x) {
+  signatures[["cell_state"]][[x]] <<- as.character(cell_state_signatures[[x]])
+  })
+
+
+usethis::use_directory("data")
+
+save(signatures, file = "data/signatures.rda")
+```
+
+Here is a list of the different signature sets:
+
+```{r}
+enframe(sapply(signatures, length), name = "set", "number") %>%
+  left_join(enframe(sapply(signatures, function(x) {
+    num <- length(x)
+    if (num > 10) {
+      names <- paste(c(names(x)[1:10], "..."), collapse = ",")
+    } else {
+      names <- paste(names(x), collapse = ",")
+    }
+    return(names)
+    }), name = "set", "signatures"), by = "set") %>%
+  DT::datatable()
+```
+
+To use the signatures, simply do:
+
+```
+data("signatures")
+
+hallmarks <- signatures[["H"]]
+lineages <- signatures[["lineages"]]
+cell_cycle_genes <- signatures[["lineages"]][["GO_CELL_CYCLE"]]
+
+# Combinations
+pathways <- c(signatures[["lineages"]], signatures[["H"]])
+names(pathways) <- gsub("HALLMARK_", "", names(pathways))
+```
+
+
+## Paper Palette
+
+To use the paper palette with ggplot2, simply do:
+
+```
+data("paper_palette")
+
+ggplot() +
+  ... +
+  scale_fill_manual(values = paper_palette) +
+  ...
+```
+
+```{r}
+paper_palette <- c(
+  ## Bulk treated
+  "BulkChemotherapy" = "#AF4FAF",
+  "Chemotherapy" = "#AF4FAF",
+  "Treated" = "#AF4FAF",
+  
+  ## Bulk relapse (240, 146, 242)
+  "BulkRelapse" = "#F092F2",
+  "Relapse" = "#F092F2",
+  
+  ## Bulk untreated (for simple)
+  "BulkUntreated" = "#43B0E3",
+  "Untreated" = "#43B0E3",
+
+  ## Diagnosis
+  "Diagnosis" = "#E38522",
+  "MRD" = "#30AF30",
+
+  ## PRS
+  "PRS" = "#307F7F",
+  
+  ## Cell cycle: deep quiescent
+  "Deep" = "#959867",
+  "DeepQ" = "#959867",
+  
+  ## Cell cycle: shallow quiescent
+  "Shallow" = "#94BE69",
+  "ShallowQ" = "#94BE69",
+  
+  ## Cell cycle: cycling
+  "Cycling" = "#CA4B1F",
+  "Cycling" = "#CA4B1F",
+  
+  ## Bulk headache: T/T (231, 119, 108)
+  "chem-chem" = "#E7776C",
+  "Chronically treated" = "#E7776C",
+  
+  ## Bulk headache: T/U
+  "chem-nochem" = "#A1A22C",
+  "Treatment Withdrawn" = "#A1A22C",
+  "Treatment withdrawn" = "#A1A22C",
+  
+  ## Bulk headache: U/T
+  "nochem-chem" = "#55B583",
+  "Acutely treated" = "#55B583",
+  
+  ## Bulk headache: U/U
+  "nochem-nochem" = "#0416C8",
+  "Untreated" = "#0416C8",
+  "Never treated" = "#0416C8",
+
+  ## Lineages
+  "ProB" = "#AF4AFF",
+  "MLP" = "#797FF4",
+  "MEP" = "#44B4FF",
+  "HSC" = "#4BD6B3",
+  "GMP" = "#67F16C",
+  "ETP" = "#97A645",
+  "EarlyB" = "#CCB43D",
+  "CMP" = "#F88134",
+  "pre-BII" = "#FF4C24",
+  "pre-BI" = "#AB0300",
+  
+  ## Yes/No
+  "Yes"= "#307F7F",
+  "No" = "#B4B4B4")
+
+usethis::use_directory("data")
+save(paper_palette, file = "data/paper_palette.rda")
+```
+

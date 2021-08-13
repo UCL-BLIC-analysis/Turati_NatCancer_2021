@@ -59,7 +59,6 @@ Preprocessing of the bulk RNA-seq data
 
 *Under construction*
 
-#### 5. Ancillary data
+#### 5. [Ancillary data](data-ancillary.html)
 
-*Under construction*
-
+Gene sets and color palette.
