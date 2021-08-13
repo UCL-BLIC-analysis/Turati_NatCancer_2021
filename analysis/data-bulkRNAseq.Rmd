@@ -19,7 +19,7 @@ This is based on merged_gene_counts.bulk.txt.gz and includes all four patients (
 
 In this section, we remove:
 
-* genes that are not expressed in almost all samples. More precisely, we remove any gene that does not have at least 1 read count in at least 3 samples.
+* genes that are not expressed in almost any sample. More precisely, we remove any gene that does not have at least 1 read count in at least 3 samples.
 * samples that do not have at least 20 genes expressed (min read counts > 0)
 
 Then we plot several PCA plots to identify outliers.
