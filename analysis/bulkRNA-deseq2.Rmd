@@ -12,8 +12,6 @@ htmltools::tagList(rmarkdown::html_dependency_font_awesome())
 library(knitr)
 library(tidyverse)
 library(DESeq2)
-library(fgsea)
-library(ggrepel)
 library(annotables)
 library(DT)
 ```
@@ -23,20 +21,10 @@ library(DT)
 
 In this document, we are looking at the differences between groups of samples.
 
-Please refer to the [Bulk Data](00-data-bulk.html) section for more info.
+Please refer to the [Data - Bulk RNAseq](data-bulkRNAseq.html) page for more info on the starting data.
 
 ```{r read_data}
 data("bulk4_dds")
-bulk_dds.mss <- readRDS("data/Virginia_BulkAnalysis_23022018.allDataHere.DESeq_object.rds")
-```
-
-```{r GSEA_pathways}
-data("signatures")
-pathways <- c(signatures[["H"]],
-              signatures[["lineages"]],
-              signatures[["B signaling"]])
-# pathways <- c(signatures[["H"]])
-names(pathways) <- gsub("HALLMARK_", "", names(pathways))
 ```
 
 ```{r DGE_function}
@@ -105,7 +93,7 @@ run_DESeq2_for_combinations <- function(deseq_obj, combinations, factor, label,
 
 ## Treated vs Untreated -- 3 patients
 
-```{r}
+```{r treated_vs_untreated.3pts.dds}
 mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT1", "PT12", "PT13")]
 mini_bulk4_dds$patient <- droplevels(mini_bulk4_dds$patient)
 mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
@@ -114,7 +102,7 @@ mini_bulk4_dds <- DESeq(mini_bulk4_dds)
 ```
 
 
-```{r}
+```{r treated_vs_untreated.3pts.combinations}
 my_combinations <- colData(mini_bulk4_dds) %>% as_tibble() %>%
   group_by(patient, group) %>%
   summarise(n = n()) %>%
@@ -129,14 +117,14 @@ datatable(my_combinations, extensions = "Buttons",
                          buttons = list("copy", 'csv', 'excel')))
 ```
 
-```{r, results="asis"}
+```{r treated_vs_untreated.3pts.run_deseq2, results="asis"}
 run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
                             label = "mini_bulk4_dds.3pts", save_data = T)
 ```
 
 ## Treated vs Untreated -- PT1
 
-```{r}
+```{r treated_vs_untreated.pt1.dds}
 mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT1")]
 mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
 design(mini_bulk4_dds) <- formula(~group)
@@ -144,14 +132,14 @@ mini_bulk4_dds <- DESeq(mini_bulk4_dds)
 ```
 
 
-```{r, results="asis"}
+```{r treated_vs_untreated.pt1.run_deseq2, results="asis"}
 run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
                             label = "mini_bulk4_dds.pt1", save_data = T)
 ```
 
 ## Treated vs Untreated -- PT12
 
-```{r}
+```{r treated_vs_untreated.pt12.dds}
 mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT12")]
 mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
 design(mini_bulk4_dds) <- formula(~group)
@@ -159,14 +147,14 @@ mini_bulk4_dds <- DESeq(mini_bulk4_dds)
 ```
 
 
-```{r, results="asis"}
+```{r treated_vs_untreated.pt12.run_deseq2, results="asis"}
 run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
                             label = "mini_bulk4_dds.pt12", save_data = T)
 ```
 
 ## Treated vs Untreated -- PT13
 
-```{r}
+```{r treated_vs_untreated.pt13.dds}
 mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT13")]
 mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
 design(mini_bulk4_dds) <- formula(~group)
@@ -174,21 +162,21 @@ mini_bulk4_dds <- DESeq(mini_bulk4_dds)
 ```
 
 
-```{r, results="asis"}
+```{r treated_vs_untreated.pt13.run_deseq2, results="asis"}
 run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations[1, ], "group",
                             label = "mini_bulk4_dds.pt13", save_data = T)
 ```
 
 ## Treatment response -- PT2
 
-```{r}
+```{r treatment_response.pt2.dds}
 mini_bulk4_dds <- bulk4_dds[, colData(bulk4_dds)$patient %in% c("PT2")]
 mini_bulk4_dds$group <- droplevels(mini_bulk4_dds$group)
 design(mini_bulk4_dds) <- formula(~group)
 mini_bulk4_dds <- DESeq(mini_bulk4_dds)
 ```
 
-```{r}
+```{r treatment_response.pt2.combinations}
 my_combinations <- colData(mini_bulk4_dds) %>% as_tibble() %>%
   group_by(patient, group) %>%
   summarise(n = n()) %>%
@@ -210,7 +198,7 @@ my_combinations <- rbind(my_combinations, additional_combination)
 datatable(my_combinations)
 ```
 
-```{r, results="asis"}
+```{r treatment_response.pt2.run_deseq2, results="asis"}
 run_DESeq2_for_combinations(mini_bulk4_dds, my_combinations, "group",
                             label = "mini_bulk4_dds.pt2", save_data = T)
 ```

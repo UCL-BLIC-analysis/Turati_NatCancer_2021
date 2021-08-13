@@ -5,3 +5,4 @@
 data/*.rda
 output/figures/*.pdf
 output/tables/*.xlsx
+output/deseq2-mini_bulk4_dds.*.rds
