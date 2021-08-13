@@ -1,0 +1,29 @@
+name: "Turati_NatCancer_2021"
+output_dir: ../docs
+navbar:
+  title: "Turati_NatCancer_2021"
+  left:
+  - text: Home
+    href: index.html
+  - text: Data
+    href: data-index.html
+  - text: Bulk RNA-seq
+    href: bulkRNA-index.html
+  - text: scRNA-seq
+    href: scRNA-index.html
+  - text: scWGS-seq
+    href: scWGS-index.html
+  - text: Methylation
+    href: methyl-index.html
+  - text: About
+    href: about.html
+output:
+  workflowr::wflow_html:
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    theme: united
+    highlight: tango
+    code_folding: hide
+    code_download: true
+
