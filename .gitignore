@@ -2,3 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+data/*.rda
+output/figures/*.pdf
+output/tables/*.xlsx
