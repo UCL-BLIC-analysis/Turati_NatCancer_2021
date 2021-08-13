@@ -8,3 +8,58 @@ editor_options:
 ---
 
 <div class="alert alert-warning">Under construction</div>
+
+```{r, message = FALSE, warning = F}
+library(tidyverse)
+library(DT)
+```
+
+#### 1. Samples overview
+
+This table show the number of datasets per sample per patient. The numbers correspond to the number of cells or samples **after QC**.
+
+```{r samples_summary}
+samples_summary <- read_csv("data-raw/samples_summary.csv", col_types = "cccc")
+
+samples_summary %>%
+  pivot_wider(names_from = "Assay", values_from = n_samples, values_fill = list(n_samples = "")) %>%
+  select(Patient, Sample, `Bulk RNA`, scRNA, scWGS, EPIC, `Bulk WGS`, `sc Q-PCR`) %>%
+  cbind(prev_patient = c("", .$Patient[1:(nrow(.)-1)])) %>%
+  mutate(Patient = ifelse(Patient == prev_patient, "", Patient)) %>%
+  select(-prev_patient) %>%
+  datatable(rownames = F, options = list(pageLength = 100, ordering = F, dom = 't')) %>%
+  formatStyle(c('Patient', 'Sample'), fontWeight = "bold") %>%
+  formatStyle(2:8, 'Sample', backgroundColor =
+                styleEqual(c("Diagnosis", "MRD (G&T)", "Relapse",
+                             "PDX untreated", "PDX treated", "PDX withdrawn",
+                             "PDX chronically", "PDX acutely", "PDX relapse",
+                             "chord blood"),
+                           c("#FCE4D6", "#FCE4D6", "#FCE4D6",
+                             "#DDEBF7", "#DDEBF7", "#DDEBF7",
+                             "#DDEBF7", "#DDEBF7", "#DDEBF7",
+                             "#E2EFDA"))) %>%
+  formatStyle(3:8, backgroundColor = styleEqual("", "#D9D9D9")) %>%
+  formatStyle(1:8, borderColor = "black") %>%
+  formatStyle(1:8, "Patient", borderColor = styleEqual("", "#CCCCCC")) %>%
+  formatStyle(1, borderLeft = "solid 1px") %>%
+  formatStyle(c(1, 2, 8), borderRight = "solid 1px") %>%
+  formatStyle(c(3:7), borderRight = "solid 1px #CCCCCC")
+```
+
+
+#### 2. [Bulk RNA-seq](data-bulkRNAseq.html)
+
+Preprocessing of the bulk RNA-seq data
+
+#### 3. scRNA-seq primaries
+
+*Under construction*
+
+#### 4. scRNA-seq PDX
+
+*Under construction*
+
+#### 5. Ancillary data
+
+*Under construction*
+

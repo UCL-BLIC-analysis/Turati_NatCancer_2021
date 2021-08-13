@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>Data - Bulk RNAseq</title>
+
+<script src="site_libs/jquery-1.12.4/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/united.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/jqueryui-1.11.4/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<script src="site_libs/navigation-1.1/codefolding.js"></script>
+<script src="site_libs/navigation-1.1/sourceembed.js"></script>
+<script src="site_libs/htmlwidgets-1.5.1/htmlwidgets.js"></script>
+<link href="site_libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet" />
+<script src="site_libs/datatables-binding-0.13/datatables.js"></script>
+<link href="site_libs/dt-core-1.10.20/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="site_libs/dt-core-1.10.20/css/jquery.dataTables.extra.css" rel="stylesheet" />
+<script src="site_libs/dt-core-1.10.20/js/jquery.dataTables.min.js"></script>
+<link href="site_libs/crosstalk-1.1.0.1/css/crosstalk.css" rel="stylesheet" />
+<script src="site_libs/crosstalk-1.1.0.1/js/crosstalk.min.js"></script>
+
+<link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/master/img/reproducible.png">
+<!-- Add a small amount of space between sections. -->
+<style type="text/css">
+div.section {
+  padding-top: 12px;
+}
+</style>
+
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css" data-origin="pandoc">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; background-color: #f8f8f8; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+pre, code { background-color: #f8f8f8; }
+code > span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+code > span.dt { color: #204a87; } /* DataType */
+code > span.dv { color: #0000cf; } /* DecVal */
+code > span.bn { color: #0000cf; } /* BaseN */
+code > span.fl { color: #0000cf; } /* Float */
+code > span.ch { color: #4e9a06; } /* Char */
+code > span.st { color: #4e9a06; } /* String */
+code > span.co { color: #8f5902; font-style: italic; } /* Comment */
+code > span.ot { color: #8f5902; } /* Other */
+code > span.al { color: #ef2929; } /* Alert */
+code > span.fu { color: #000000; } /* Function */
+code > span.er { color: #a40000; font-weight: bold; } /* Error */
+code > span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #000000; } /* Constant */
+code > span.sc { color: #000000; } /* SpecialChar */
+code > span.vs { color: #4e9a06; } /* VerbatimString */
+code > span.ss { color: #4e9a06; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #000000; } /* Variable */
+code > span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+code > span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+code > span.ex { } /* Extension */
+code > span.at { color: #c4a000; } /* Attribute */
+code > span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+code > span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+
+.sourceCode .row {
+  width: 100%;
+}
+.sourceCode {
+  overflow-x: auto;
+}
+.code-folding-btn {
+  margin-right: -30px;
+}
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+#rmd-source-code {
+  display: none;
+}
+</style>
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+</style>
+
+
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+  padding-top: 51px;
+  padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar)  */
+.section h1 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h2 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h3 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h4 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h5 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h6 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #ffffff;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script>
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.parent().addClass('active');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+<style type="text/css">
+.code-folding-btn { margin-bottom: 4px; }
+</style>
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row-fluid">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Turati_NatCancer_2021</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="data-index.html">Data</a>
+</li>
+<li>
+  <a href="bulkRNA-index.html">Bulk RNA-seq</a>
+</li>
+<li>
+  <a href="scRNA-index.html">scRNA-seq</a>
+</li>
+<li>
+  <a href="scWGS-index.html">scWGS-seq</a>
+</li>
+<li>
+  <a href="methyl-index.html">Methylation</a>
+</li>
+<li>
+  <a href="about.html">About</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div class="fluid-row" id="header">
+
+<div class="btn-group pull-right">
+<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Code</span> <span class="caret"></span></button>
+<ul class="dropdown-menu" style="min-width: 50px;">
+<li><a id="rmd-show-all-code" href="#">Show All Code</a></li>
+<li><a id="rmd-hide-all-code" href="#">Hide All Code</a></li>
+<li role="separator" class="divider"></li>
+<li><a id="rmd-download-source" href="#">Download Rmd</a></li>
+</ul>
+</div>
+
+
+
+<h1 class="title toc-ignore">Data - Bulk RNAseq</h1>
+
+</div>
+
+
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span> workflowr <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
+</button>
+</p>
+<div id="workflowr-report" class="collapse">
+<ul class="nav nav-tabs">
+<li class="active">
+<a data-toggle="tab" href="#summary">Summary</a>
+</li>
+<li>
+<a data-toggle="tab" href="#checks"> Checks <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> </a>
+</li>
+<li>
+<a data-toggle="tab" href="#versions">Past versions</a>
+</li>
+</ul>
+<div class="tab-content">
+<div id="summary" class="tab-pane fade in active">
+<p>
+<strong>Last updated:</strong> 2021-08-13
+</p>
+<p>
+<strong>Checks:</strong> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7 <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> 0
+</p>
+<p>
+<strong>Knit directory:</strong> <code>Turati_NatCancer_2021/</code> <span class="glyphicon glyphicon-question-sign" aria-hidden="true" title="This is the local directory in which the code in this file was executed."> </span>
+</p>
+<p>
+This reproducible <a href="http://rmarkdown.rstudio.com">R Markdown</a> analysis was created with <a
+  href="https://github.com/jdblischak/workflowr">workflowr</a> (version 1.6.2). The <em>Checks</em> tab describes the reproducibility checks that were applied when the results were created. The <em>Past versions</em> tab lists the development history.
+</p>
+<hr>
+</div>
+<div id="checks" class="tab-pane fade">
+<div id="workflowr-checks" class="panel-group">
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date </a>
+</p>
+</div>
+<div id="strongRMarkdownfilestronguptodate" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great! Since the R Markdown file has been committed to the Git repository, you know the exact version of the code that produced these results.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongEnvironmentstrongempty"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Environment:</strong> empty </a>
+</p>
+</div>
+<div id="strongEnvironmentstrongempty" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! The global environment was empty. Objects defined in the global environment can affect the analysis in your R Markdown file in unknown ways. For reproduciblity it’s best to always run the code in an empty environment.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSeedstrongcodesetseed20210812code"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Seed:</strong> <code>set.seed(20210812)</code> </a>
+</p>
+</div>
+<div id="strongSeedstrongcodesetseed20210812code" class="panel-collapse collapse">
+<div class="panel-body">
+<p>The command <code>set.seed(20210812)</code> was run prior to running the code in the R Markdown file. Setting a seed ensures that any results that rely on randomness, e.g. subsampling or permutations, are reproducible.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSessioninformationstrongrecorded"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Session information:</strong> recorded </a>
+</p>
+</div>
+<div id="strongSessioninformationstrongrecorded" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Recording the operating system, R version, and package versions is critical for reproducibility.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Cache:</strong> none </a>
+</p>
+</div>
+<div id="strongCachestrongnone" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Nice! There were no cached chunks for this analysis, so you can be confident that you successfully produced the results during this run.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongFilepathsstrongrelative"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>File paths:</strong> relative </a>
+</p>
+</div>
+<div id="strongFilepathsstrongrelative" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Using relative paths to the files within your workflowr project makes it easier to run your code on other machines.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021treeb019b659a59343c78ba9c5d3df0d2527d2349745targetblankb019b65a"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/b019b659a59343c78ba9c5d3df0d2527d2349745" target="_blank">b019b65</a> </a>
+</p>
+</div>
+<div id="strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021treeb019b659a59343c78ba9c5d3df0d2527d2349745targetblankb019b65a" class="panel-collapse collapse">
+<div class="panel-body">
+<p>
+Great! You are using Git for version control. Tracking code development and connecting the code version to the results is critical for reproducibility.
+</p>
+<p>
+The results in this page were generated with repository version <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/b019b659a59343c78ba9c5d3df0d2527d2349745" target="_blank">b019b65</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
+</p>
+<p>
+Note that you need to be careful to ensure that all relevant files for the analysis have been committed to Git prior to generating the results (you can use <code>wflow_publish</code> or <code>wflow_git_commit</code>). workflowr only checks the R Markdown file, but you know if there are other scripts or data files that it depends on. Below is the status of the Git repository when the results were generated:
+</p>
+<pre><code>
+Ignored files:
+    Ignored:    .Rhistory
+    Ignored:    .Rproj.user/
+
+Untracked files:
+    Untracked:  analysis/bulkRNA-pca.Rmd2
+    Untracked:  analysis/data-ancillary.Rmd
+    Untracked:  analysis/data-index2.Rmd
+    Untracked:  data-raw/12885_2017_3103_MOESM1_ESM.xlsx
+    Untracked:  data-raw/41586_2019_1652_MOESM3_ESM.xlsx
+    Untracked:  data-raw/PopSpecificSignatures_250.gmx
+    Untracked:  data-raw/cell_state.gmt
+    Untracked:  data-raw/pre-BI-pre-BII.gmt
+    Untracked:  data-raw/samples_summary.csv
+    Untracked:  data/bulk4_counts.rda
+    Untracked:  data/bulk4_dds.rda
+    Untracked:  data/paper_palette.rda
+    Untracked:  data/signatures.rda
+    Untracked:  docs2/
+    Untracked:  output/figures/
+    Untracked:  output/tables/
+
+Unstaged changes:
+    Modified:   bulkRNA/bulk-deseq2.Rmd
+    Deleted:    bulkRNA/bulk-pca.Rmd
+
+</code></pre>
+<p>
+Note that any generated files, e.g. HTML, png, CSS, etc., are not included in this status report because it is ok for generated content to have uncommitted changes.
+</p>
+</div>
+</div>
+</div>
+</div>
+<hr>
+</div>
+<div id="versions" class="tab-pane fade">
+
+<p>
+These are the previous versions of the repository in which changes were made to the R Markdown (<code>analysis/data-bulkRNAseq.Rmd</code>) and HTML (<code>docs/data-bulkRNAseq.html</code>) files. If you’ve configured a remote Git repository (see <code>?wflow_git_remote</code>), click on the hyperlinks in the table below to view the files as they were in that past version.
+</p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/blob/b019b659a59343c78ba9c5d3df0d2527d2349745/analysis/data-bulkRNAseq.Rmd" target="_blank">b019b65</a>
+</td>
+<td>
+Javier Herrero
+</td>
+<td>
+2021-08-13
+</td>
+<td>
+Adding data / Bulk RNAseq page
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</div>
+</div>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(tidyverse)
+<span class="kw">library</span>(DESeq2)
+<span class="kw">library</span>(DT)
+<span class="co"># knitr::opts_chunk$set(cache = T, autodep = T)</span></code></pre></div>
+<p>This is based on merged_gene_counts.bulk.txt.gz and includes all four patients (PT1, PT2, PT12 and PT13). PT12 and PT13 were added at a later date and the data were re-processed all together from scratch with the NextFlow pipeline described above.</p>
+<div id="initial-filtering" class="section level2">
+<h2>Initial filtering</h2>
+<p>In this section, we remove:</p>
+<ul>
+<li>genes that are not expressed in almost all samples. More precisely, we remove any gene that does not have at least 1 read count in at least 3 samples.</li>
+<li>samples that do not have at least 20 genes expressed (min read counts &gt; 0)</li>
+</ul>
+<p>Then we plot several PCA plots to identify outliers.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">merged_gene_counts.bulk &lt;-<span class="st"> </span><span class="kw">read.table</span>(<span class="st">&quot;data-raw/merged_gene_counts.bulk.txt.gz&quot;</span>, <span class="dt">row.names =</span> <span class="dv">1</span>, <span class="dt">header =</span> T)
+<span class="kw">colnames</span>(merged_gene_counts.bulk) &lt;-<span class="st"> </span><span class="kw">gsub</span>(<span class="st">&quot;.&quot;</span>, <span class="st">&quot;_&quot;</span>, <span class="kw">colnames</span>(merged_gene_counts.bulk), <span class="dt">fixed =</span> T)
+sample_table &lt;-<span class="st"> </span><span class="kw">read.csv</span>(<span class="st">&quot;data-raw/sample_bulk_rna.csv&quot;</span>, <span class="dt">stringsAsFactors =</span> F)
+
+
+<span class="co"># Identify genes that are not expressed in any sample</span>
+minExpression &lt;-<span class="st"> </span><span class="dv">1</span>
+minSamples &lt;-<span class="st"> </span><span class="dv">3</span>
+genes_in_few_samples &lt;-<span class="st"> </span><span class="kw">names</span>(<span class="kw">which</span>(<span class="kw">apply</span>(merged_gene_counts.bulk <span class="op">&gt;=</span><span class="st"> </span>minExpression, <span class="dv">1</span>, sum) <span class="op">&gt;=</span><span class="st"> </span>minSamples))
+merged_gene_counts.bulk &lt;-<span class="st"> </span>merged_gene_counts.bulk[genes_in_few_samples, ]
+
+<span class="co"># Identify samples that don&#39;t have at least 20 genes expressed (very low hanging fruit)</span>
+minExpression &lt;-<span class="st"> </span><span class="dv">1</span>
+minGenes &lt;-<span class="st"> </span><span class="dv">20</span>
+samples_with_few_genes &lt;-<span class="st"> </span><span class="kw">names</span>(<span class="kw">which</span>(<span class="kw">apply</span>(merged_gene_counts.bulk <span class="op">&gt;=</span><span class="st"> </span>minExpression, <span class="dv">2</span>, sum) <span class="op">&lt;</span><span class="st"> </span>minGenes))
+samples_to_remove &lt;-<span class="st"> </span><span class="kw">c</span>(samples_with_few_genes)
+
+<span class="co"># Filter sample table</span>
+sample_table &lt;-<span class="st"> </span>sample_table <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(<span class="op">!</span>(title <span class="op">%in%</span><span class="st"> </span>samples_to_remove))
+
+<span class="co"># Filter counts matrix</span>
+merged_gene_counts.bulk &lt;-<span class="st"> </span>merged_gene_counts.bulk[, sample_table<span class="op">$</span>title]
+
+<span class="co"># Data wrangling, from EGA metadata</span>
+sample_table &lt;-<span class="st"> </span>sample_table <span class="op">%&gt;%</span>
+<span class="st">  </span>dplyr<span class="op">::</span><span class="kw">rename</span>(<span class="dt">sample =</span> title, <span class="dt">patient =</span> subjectId, <span class="dt">group =</span> description) <span class="op">%&gt;%</span>
+<span class="st">  </span>dplyr<span class="op">::</span><span class="kw">select</span>(sample, patient, group) <span class="op">%&gt;%</span>
+<span class="st">  </span>dplyr<span class="op">::</span><span class="kw">mutate</span>(<span class="dt">tissue =</span> <span class="kw">case_when</span>(
+    patient <span class="op">==</span><span class="st"> &quot;PT1&quot;</span> <span class="op">~</span><span class="st"> &quot;&quot;</span>,
+    patient <span class="op">==</span><span class="st"> &quot;PT12&quot;</span> <span class="op">~</span><span class="st"> &quot;&quot;</span>,
+    patient <span class="op">==</span><span class="st"> &quot;PT13&quot;</span> <span class="op">~</span><span class="st"> &quot;&quot;</span>,
+    <span class="kw">grepl</span>(<span class="st">&quot;mouse bone marrow&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;BM&quot;</span>,
+    <span class="kw">grepl</span>(<span class="st">&quot;mouse spleen&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Spleen&quot;</span>,
+    <span class="kw">grepl</span>(<span class="st">&quot;mouse brain&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Brain&quot;</span>,
+    <span class="ot">TRUE</span> <span class="op">~</span><span class="st"> </span>group
+  )) <span class="op">%&gt;%</span>
+<span class="st">  </span>dplyr<span class="op">::</span><span class="kw">mutate</span>(<span class="dt">group =</span> <span class="kw">case_when</span>(
+    patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>, <span class="st">&quot;PT12&quot;</span>, <span class="st">&quot;PT13&quot;</span>) <span class="op">&amp;</span><span class="st"> </span><span class="kw">grepl</span>(<span class="st">&quot;untreated&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Untreated&quot;</span>,
+    patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>, <span class="st">&quot;PT12&quot;</span>, <span class="st">&quot;PT13&quot;</span>) <span class="op">&amp;</span><span class="st"> </span><span class="kw">grepl</span>(<span class="st">&quot;treated&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Treated&quot;</span>,
+    patient <span class="op">==</span><span class="st"> &quot;PT2&quot;</span> <span class="op">&amp;</span><span class="st"> </span><span class="kw">grepl</span>(<span class="st">&quot;untreated control&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Never treated&quot;</span>,
+    patient <span class="op">==</span><span class="st"> &quot;PT2&quot;</span> <span class="op">&amp;</span><span class="st"> </span><span class="kw">grepl</span>(<span class="st">&quot;acutely treated&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Acutely treated&quot;</span>,
+    patient <span class="op">==</span><span class="st"> &quot;PT2&quot;</span> <span class="op">&amp;</span><span class="st"> </span><span class="kw">grepl</span>(<span class="st">&quot;treatment withdr&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Treatment withdrawn&quot;</span>,
+    patient <span class="op">==</span><span class="st"> &quot;PT2&quot;</span> <span class="op">&amp;</span><span class="st"> </span><span class="kw">grepl</span>(<span class="st">&quot;chronically treated&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Chronically treated&quot;</span>,
+    patient <span class="op">==</span><span class="st"> &quot;PT2&quot;</span> <span class="op">&amp;</span><span class="st"> </span><span class="kw">grepl</span>(<span class="st">&quot;relapse&quot;</span>, group) <span class="op">~</span><span class="st"> &quot;Relapse&quot;</span>,
+    <span class="ot">TRUE</span> <span class="op">~</span><span class="st"> </span>group
+  )) <span class="op">%&gt;%</span>
+<span class="st">  </span>dplyr<span class="op">::</span><span class="kw">mutate</span>(<span class="dt">patient =</span> <span class="kw">factor</span>(patient), <span class="dt">group =</span> <span class="kw">factor</span>(group), <span class="dt">tissue =</span> <span class="kw">factor</span>(tissue))
+
+bulk_dds &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">DESeqDataSetFromMatrix</span>(merged_gene_counts.bulk,
+                                           <span class="dt">colData =</span> sample_table,
+                                           <span class="dt">design =</span> <span class="op">~</span><span class="st"> </span>group)</code></pre></div>
+<pre><code>  Note: levels of factors in the design contain characters other than
+  letters, numbers, &#39;_&#39; and &#39;.&#39;. It is recommended (but not required) to use
+  only letters, numbers, and delimiters &#39;_&#39; or &#39;.&#39;, as these are safe characters
+  for column names in R. [This is a message, not an warning or error]</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bulk_vst &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">vst</span>(bulk_dds)
+pca.pre1 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT1&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT1&quot;</span>)
+pca.pre2 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT2&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT2&quot;</span>)
+pca.pre3 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT12&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT12&quot;</span>)
+pca.pre4 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT13&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT13&quot;</span>)
+pca.pre5 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>, <span class="st">&quot;PT12&quot;</span>)], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT1 + PT12&quot;</span>)
+pca.pre6 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>, <span class="st">&quot;PT12&quot;</span>, <span class="st">&quot;PT13&quot;</span>)], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT1 + PT12 + PT13&quot;</span>)
+pca.pre7 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst, <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;All patients&quot;</span>)
+
+pca.pre1</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/data_wrangling-1.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre2</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/data_wrangling-2.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre3</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/data_wrangling-3.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre4</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/data_wrangling-4.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre5</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/data_wrangling-5.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre6</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/data_wrangling-6.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre7</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/data_wrangling-7.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="removing-the-outliers" class="section level2">
+<h2>Removing the outliers</h2>
+<p>List of outliers:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">samples_to_remove &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;VT11_N705_S504&quot;</span>, <span class="co"># Outlier in PT1</span>
+                       <span class="st">&quot;VTb2_N706_S517&quot;</span>, <span class="co"># Acutely treated clustering with untreated</span>
+                       <span class="st">&quot;VT47b_N706_S503&quot;</span> <span class="co"># Outlier in PT12</span>
+                       )
+
+sample_table <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">filter</span>(sample <span class="op">%in%</span><span class="st"> </span>samples_to_remove) <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">datatable</span>(<span class="dt">rownames =</span> F, <span class="dt">options =</span> <span class="kw">list</span>(<span class="dt">pageLength =</span> <span class="dv">100</span>, <span class="dt">ordering =</span> F, <span class="dt">dom =</span> <span class="st">&#39;t&#39;</span>))</code></pre></div>
+<div id="htmlwidget-8731f997d61eff12e0ea" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-8731f997d61eff12e0ea">{"x":{"filter":"none","data":[["VT11_N705_S504","VTb2_N706_S517","VT47b_N706_S503"],["PT1","PT2","PT12"],["Untreated","Acutely treated","Treated"],["","Brain",""]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>sample<\/th>\n      <th>patient<\/th>\n      <th>group<\/th>\n      <th>tissue<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":100,"ordering":false,"dom":"t","order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">sample_table &lt;-<span class="st"> </span>sample_table <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(<span class="op">!</span>(sample <span class="op">%in%</span><span class="st"> </span>samples_to_remove))
+
+merged_gene_counts.bulk &lt;-<span class="st"> </span>merged_gene_counts.bulk[, sample_table<span class="op">$</span>sample]
+
+bulk_dds &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">DESeqDataSetFromMatrix</span>(merged_gene_counts.bulk,
+                                           <span class="dt">colData =</span> sample_table,
+                                           <span class="dt">design =</span> <span class="op">~</span><span class="st"> </span>group)</code></pre></div>
+<pre><code>  Note: levels of factors in the design contain characters other than
+  letters, numbers, &#39;_&#39; and &#39;.&#39;. It is recommended (but not required) to use
+  only letters, numbers, and delimiters &#39;_&#39; or &#39;.&#39;, as these are safe characters
+  for column names in R. [This is a message, not an warning or error]</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bulk_vst &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">vst</span>(bulk_dds)
+
+pca.post1 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT1&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT1&quot;</span>)
+pca.post2 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT2&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT2&quot;</span>)
+pca.post3 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT12&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT12&quot;</span>)
+pca.post4 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">==</span><span class="st"> &quot;PT13&quot;</span>], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT13&quot;</span>)
+pca.post5 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>, <span class="st">&quot;PT12&quot;</span>)], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT1 + PT12&quot;</span>)
+pca.post6 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst[, <span class="kw">colData</span>(bulk_vst)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>, <span class="st">&quot;PT12&quot;</span>, <span class="st">&quot;PT13&quot;</span>)], <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;PT1 + PT12 + PT13&quot;</span>)
+pca.post7 &lt;-<span class="st"> </span>DESeq2<span class="op">::</span><span class="kw">plotPCA</span>(bulk_vst, <span class="dt">intgroup =</span> <span class="kw">c</span>(<span class="st">&quot;patient&quot;</span>, <span class="st">&quot;group&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> name), <span class="dt">size =</span> <span class="dv">2</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">ggtitle</span>(<span class="st">&quot;All patients&quot;</span>)</code></pre></div>
+<p>And here are the PCA plots after and before removing the outliers:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;### {.tabset .unlisted .unnumbered .toc-ignore}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="section" class="section level3 tabset unlisted unnumbered toc-ignore">
+<h3></h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### Before</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="before" class="section level4">
+<h4>Before</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre1</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-1.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### After {.active}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+<div id="after" class="section level4 active">
+<h4>After</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.post1</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-2.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;### {.tabset .unlisted .unnumbered .toc-ignore}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+</div>
+<div id="section-1" class="section level3 tabset unlisted unnumbered toc-ignore">
+<h3></h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### Before</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="before-1" class="section level4">
+<h4>Before</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre2</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-3.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### After {.active}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+<div id="after-1" class="section level4 active">
+<h4>After</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.post2</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-4.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;### {.tabset .unlisted .unnumbered .toc-ignore}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+</div>
+<div id="section-2" class="section level3 tabset unlisted unnumbered toc-ignore">
+<h3></h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### Before</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="before-2" class="section level4">
+<h4>Before</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre3</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-5.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### After {.active}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+<div id="after-2" class="section level4 active">
+<h4>After</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.post3</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-6.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;### {.tabset .unlisted .unnumbered .toc-ignore}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+</div>
+<div id="section-3" class="section level3 tabset unlisted unnumbered toc-ignore">
+<h3></h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### Before</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="before-3" class="section level4">
+<h4>Before</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre4</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-7.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### After {.active}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+<div id="after-3" class="section level4 active">
+<h4>After</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.post4</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-8.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;### {.tabset .unlisted .unnumbered .toc-ignore}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+</div>
+<div id="section-4" class="section level3 tabset unlisted unnumbered toc-ignore">
+<h3></h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### Before</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="before-4" class="section level4">
+<h4>Before</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre5</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-9.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### After {.active}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+<div id="after-4" class="section level4 active">
+<h4>After</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.post5</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-10.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;### {.tabset .unlisted .unnumbered .toc-ignore}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+</div>
+<div id="section-5" class="section level3 tabset unlisted unnumbered toc-ignore">
+<h3></h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### Before</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="before-5" class="section level4">
+<h4>Before</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre6</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-11.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### After {.active}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+<div id="after-5" class="section level4 active">
+<h4>After</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.post6</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-12.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;### {.tabset .unlisted .unnumbered .toc-ignore}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+</div>
+<div id="section-6" class="section level3 tabset unlisted unnumbered toc-ignore">
+<h3></h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### Before</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+<div id="before-6" class="section level4">
+<h4>Before</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.pre7</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-13.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cat</span>(<span class="st">&quot;#### After {.active}</span><span class="ch">\n\n</span><span class="st">&quot;</span>)</code></pre></div>
+</div>
+<div id="after-6" class="section level4 active">
+<h4>After</h4>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pca.post7</code></pre></div>
+<p><img src="figure/data-bulkRNAseq.Rmd/comparison_before_after_outliers-14.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+</div>
+<div id="storing-the-data" class="section level2">
+<h2>Storing the data</h2>
+<p>The data objects stored are called: <code>bulk4_counts</code> and <code>bulk4_dds</code>.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Save this data object</span>
+usethis<span class="op">::</span><span class="kw">use_directory</span>(<span class="st">&quot;data&quot;</span>)</code></pre></div>
+<pre><code>✔ Setting active project to &#39;/Users/javier/Projects/Turati_NatCancer_2021&#39;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bulk4_counts &lt;-<span class="st"> </span>merged_gene_counts.bulk
+<span class="kw">save</span>(bulk4_counts, <span class="dt">file =</span> <span class="st">&quot;data/bulk4_counts.rda&quot;</span>)
+
+usethis<span class="op">::</span><span class="kw">use_directory</span>(<span class="st">&quot;data&quot;</span>)
+bulk4_dds &lt;-<span class="st"> </span>bulk_dds
+<span class="kw">save</span>(bulk4_dds, <span class="dt">file =</span> <span class="st">&quot;data/bulk4_dds.rda&quot;</span>)</code></pre></div>
+<br>
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-sessioninfo" data-toggle="collapse" data-target="#workflowr-sessioninfo" style="display: block;">
+<span class="glyphicon glyphicon-wrench" aria-hidden="true"></span> Session information
+</button>
+</p>
+<div id="workflowr-sessioninfo" class="collapse">
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">sessionInfo</span>()</code></pre></div>
+<pre><code>R version 3.6.3 (2020-02-29)
+Platform: x86_64-apple-darwin15.6.0 (64-bit)
+Running under: macOS Catalina 10.15.7
+
+Matrix products: default
+BLAS:   /Library/Frameworks/R.framework/Versions/3.6/Resources/lib/libRblas.0.dylib
+LAPACK: /Library/Frameworks/R.framework/Versions/3.6/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_GB.UTF-8/en_GB.UTF-8/en_GB.UTF-8/C/en_GB.UTF-8/en_GB.UTF-8
+
+attached base packages:
+[1] parallel  stats4    stats     graphics  grDevices utils     datasets 
+[8] methods   base     
+
+other attached packages:
+ [1] DT_0.13                     DESeq2_1.26.0              
+ [3] SummarizedExperiment_1.16.1 DelayedArray_0.12.3        
+ [5] BiocParallel_1.20.1         matrixStats_0.56.0         
+ [7] Biobase_2.46.0              GenomicRanges_1.38.0       
+ [9] GenomeInfoDb_1.22.0         IRanges_2.20.2             
+[11] S4Vectors_0.24.4            BiocGenerics_0.32.0        
+[13] forcats_0.5.0               stringr_1.4.0              
+[15] dplyr_1.0.0                 purrr_0.3.3                
+[17] readr_1.3.1                 tidyr_1.0.2                
+[19] tibble_2.1.3                ggplot2_3.3.1              
+[21] tidyverse_1.3.0            
+
+loaded via a namespace (and not attached):
+  [1] colorspace_1.4-1       ellipsis_0.3.0         rprojroot_1.3-2       
+  [4] htmlTable_1.13.3       XVector_0.26.0         base64enc_0.1-3       
+  [7] fs_1.3.2               rstudioapi_0.11        farver_2.0.3          
+ [10] ggrepel_0.8.2          bit64_0.9-7            AnnotationDbi_1.48.0  
+ [13] lubridate_1.7.4        xml2_1.2.5             splines_3.6.3         
+ [16] geneplotter_1.64.0     knitr_1.28             Formula_1.2-3         
+ [19] jsonlite_1.6.1         workflowr_1.6.2        broom_0.5.5           
+ [22] annotate_1.64.0        cluster_2.1.0          dbplyr_1.4.2          
+ [25] png_0.1-7              compiler_3.6.3         httr_1.4.1            
+ [28] backports_1.1.5        assertthat_0.2.1       Matrix_1.2-18         
+ [31] cli_3.0.0              later_1.0.0            acepack_1.4.1         
+ [34] htmltools_0.5.1.1      tools_3.6.3            gtable_0.3.0          
+ [37] glue_1.3.2             GenomeInfoDbData_1.2.2 Rcpp_1.0.4            
+ [40] cellranger_1.1.0       vctrs_0.3.0            nlme_3.1-145          
+ [43] crosstalk_1.1.0.1      xfun_0.16              rvest_0.3.5           
+ [46] lifecycle_0.2.0        XML_3.99-0.3           zlibbioc_1.32.0       
+ [49] scales_1.1.0           clisymbols_1.2.0       hms_0.5.3             
+ [52] promises_1.1.0         RColorBrewer_1.1-2     yaml_2.2.1            
+ [55] memoise_1.1.0          gridExtra_2.3          rpart_4.1-15          
+ [58] latticeExtra_0.6-29    stringi_1.4.6          RSQLite_2.2.0         
+ [61] genefilter_1.68.0      checkmate_2.0.0        rlang_0.4.11          
+ [64] pkgconfig_2.0.3        bitops_1.0-6           evaluate_0.14         
+ [67] lattice_0.20-40        labeling_0.3           htmlwidgets_1.5.1     
+ [70] bit_1.1-15.2           tidyselect_1.1.0       magrittr_1.5          
+ [73] R6_2.4.1               generics_0.0.2         Hmisc_4.3-1           
+ [76] DBI_1.1.0              pillar_1.4.3           haven_2.2.0           
+ [79] whisker_0.4            foreign_0.8-76         withr_2.4.2           
+ [82] survival_3.1-11        RCurl_1.98-1.1         nnet_7.3-13           
+ [85] modelr_0.1.6           crayon_1.3.4           rmarkdown_2.1         
+ [88] usethis_1.5.1          jpeg_0.1-8.1           locfit_1.5-9.1        
+ [91] grid_3.6.3             readxl_1.3.1           data.table_1.12.8     
+ [94] blob_1.2.1             git2r_0.26.1           reprex_0.3.0          
+ [97] digest_0.6.25          xtable_1.8-4           httpuv_1.5.2          
+[100] munsell_0.5.0         </code></pre>
+</div>
+</div>
+
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiRGF0YSAtIEJ1bGsgUk5Bc2VxIgpvdXRwdXQ6IHdvcmtmbG93cjo6d2Zsb3dfaHRtbAplZGl0b3Jfb3B0aW9uczoKICBjaHVua19vdXRwdXRfdHlwZTogY29uc29sZQotLS0KCmBgYHtyLCBtZXNzYWdlID0gRiwgd2FybmluZyA9IEZ9CmxpYnJhcnkodGlkeXZlcnNlKQpsaWJyYXJ5KERFU2VxMikKbGlicmFyeShEVCkKIyBrbml0cjo6b3B0c19jaHVuayRzZXQoY2FjaGUgPSBULCBhdXRvZGVwID0gVCkKYGBgCgoKVGhpcyBpcyBiYXNlZCBvbiBtZXJnZWRfZ2VuZV9jb3VudHMuYnVsay50eHQuZ3ogYW5kIGluY2x1ZGVzIGFsbCBmb3VyIHBhdGllbnRzIChQVDEsIFBUMiwgUFQxMiBhbmQgUFQxMykuIFBUMTIgYW5kIFBUMTMgd2VyZSBhZGRlZCBhdCBhIGxhdGVyIGRhdGUgYW5kIHRoZSBkYXRhIHdlcmUgcmUtcHJvY2Vzc2VkIGFsbCB0b2dldGhlciBmcm9tIHNjcmF0Y2ggd2l0aCB0aGUgTmV4dEZsb3cgcGlwZWxpbmUgZGVzY3JpYmVkIGFib3ZlLgoKIyMgSW5pdGlhbCBmaWx0ZXJpbmcKCkluIHRoaXMgc2VjdGlvbiwgd2UgcmVtb3ZlOgoKKiBnZW5lcyB0aGF0IGFyZSBub3QgZXhwcmVzc2VkIGluIGFsbW9zdCBhbGwgc2FtcGxlcy4gTW9yZSBwcmVjaXNlbHksIHdlIHJlbW92ZSBhbnkgZ2VuZSB0aGF0IGRvZXMgbm90IGhhdmUgYXQgbGVhc3QgMSByZWFkIGNvdW50IGluIGF0IGxlYXN0IDMgc2FtcGxlcy4KKiBzYW1wbGVzIHRoYXQgZG8gbm90IGhhdmUgYXQgbGVhc3QgMjAgZ2VuZXMgZXhwcmVzc2VkIChtaW4gcmVhZCBjb3VudHMgPiAwKQoKVGhlbiB3ZSBwbG90IHNldmVyYWwgUENBIHBsb3RzIHRvIGlkZW50aWZ5IG91dGxpZXJzLgoKYGBge3IgZGF0YV93cmFuZ2xpbmd9Cm1lcmdlZF9nZW5lX2NvdW50cy5idWxrIDwtIHJlYWQudGFibGUoImRhdGEtcmF3L21lcmdlZF9nZW5lX2NvdW50cy5idWxrLnR4dC5neiIsIHJvdy5uYW1lcyA9IDEsIGhlYWRlciA9IFQpCmNvbG5hbWVzKG1lcmdlZF9nZW5lX2NvdW50cy5idWxrKSA8LSBnc3ViKCIuIiwgIl8iLCBjb2xuYW1lcyhtZXJnZWRfZ2VuZV9jb3VudHMuYnVsayksIGZpeGVkID0gVCkKc2FtcGxlX3RhYmxlIDwtIHJlYWQuY3N2KCJkYXRhLXJhdy9zYW1wbGVfYnVsa19ybmEuY3N2Iiwgc3RyaW5nc0FzRmFjdG9ycyA9IEYpCgoKIyBJZGVudGlmeSBnZW5lcyB0aGF0IGFyZSBub3QgZXhwcmVzc2VkIGluIGFueSBzYW1wbGUKbWluRXhwcmVzc2lvbiA8LSAxCm1pblNhbXBsZXMgPC0gMwpnZW5lc19pbl9mZXdfc2FtcGxlcyA8LSBuYW1lcyh3aGljaChhcHBseShtZXJnZWRfZ2VuZV9jb3VudHMuYnVsayA+PSBtaW5FeHByZXNzaW9uLCAxLCBzdW0pID49IG1pblNhbXBsZXMpKQptZXJnZWRfZ2VuZV9jb3VudHMuYnVsayA8LSBtZXJnZWRfZ2VuZV9jb3VudHMuYnVsa1tnZW5lc19pbl9mZXdfc2FtcGxlcywgXQoKIyBJZGVudGlmeSBzYW1wbGVzIHRoYXQgZG9uJ3QgaGF2ZSBhdCBsZWFzdCAyMCBnZW5lcyBleHByZXNzZWQgKHZlcnkgbG93IGhhbmdpbmcgZnJ1aXQpCm1pbkV4cHJlc3Npb24gPC0gMQptaW5HZW5lcyA8LSAyMApzYW1wbGVzX3dpdGhfZmV3X2dlbmVzIDwtIG5hbWVzKHdoaWNoKGFwcGx5KG1lcmdlZF9nZW5lX2NvdW50cy5idWxrID49IG1pbkV4cHJlc3Npb24sIDIsIHN1bSkgPCBtaW5HZW5lcykpCnNhbXBsZXNfdG9fcmVtb3ZlIDwtIGMoc2FtcGxlc193aXRoX2Zld19nZW5lcykKCiMgRmlsdGVyIHNhbXBsZSB0YWJsZQpzYW1wbGVfdGFibGUgPC0gc2FtcGxlX3RhYmxlICU+JSBmaWx0ZXIoISh0aXRsZSAlaW4lIHNhbXBsZXNfdG9fcmVtb3ZlKSkKCiMgRmlsdGVyIGNvdW50cyBtYXRyaXgKbWVyZ2VkX2dlbmVfY291bnRzLmJ1bGsgPC0gbWVyZ2VkX2dlbmVfY291bnRzLmJ1bGtbLCBzYW1wbGVfdGFibGUkdGl0bGVdCgojIERhdGEgd3JhbmdsaW5nLCBmcm9tIEVHQSBtZXRhZGF0YQpzYW1wbGVfdGFibGUgPC0gc2FtcGxlX3RhYmxlICU+JQogIGRwbHlyOjpyZW5hbWUoc2FtcGxlID0gdGl0bGUsIHBhdGllbnQgPSBzdWJqZWN0SWQsIGdyb3VwID0gZGVzY3JpcHRpb24pICU+JQogIGRwbHlyOjpzZWxlY3Qoc2FtcGxlLCBwYXRpZW50LCBncm91cCkgJT4lCiAgZHBseXI6Om11dGF0ZSh0aXNzdWUgPSBjYXNlX3doZW4oCiAgICBwYXRpZW50ID09ICJQVDEiIH4gIiIsCiAgICBwYXRpZW50ID09ICJQVDEyIiB+ICIiLAogICAgcGF0aWVudCA9PSAiUFQxMyIgfiAiIiwKICAgIGdyZXBsKCJtb3VzZSBib25lIG1hcnJvdyIsIGdyb3VwKSB+ICJCTSIsCiAgICBncmVwbCgibW91c2Ugc3BsZWVuIiwgZ3JvdXApIH4gIlNwbGVlbiIsCiAgICBncmVwbCgibW91c2UgYnJhaW4iLCBncm91cCkgfiAiQnJhaW4iLAogICAgVFJVRSB+IGdyb3VwCiAgKSkgJT4lCiAgZHBseXI6Om11dGF0ZShncm91cCA9IGNhc2Vfd2hlbigKICAgIHBhdGllbnQgJWluJSBjKCJQVDEiLCAiUFQxMiIsICJQVDEzIikgJiBncmVwbCgidW50cmVhdGVkIiwgZ3JvdXApIH4gIlVudHJlYXRlZCIsCiAgICBwYXRpZW50ICVpbiUgYygiUFQxIiwgIlBUMTIiLCAiUFQxMyIpICYgZ3JlcGwoInRyZWF0ZWQiLCBncm91cCkgfiAiVHJlYXRlZCIsCiAgICBwYXRpZW50ID09ICJQVDIiICYgZ3JlcGwoInVudHJlYXRlZCBjb250cm9sIiwgZ3JvdXApIH4gIk5ldmVyIHRyZWF0ZWQiLAogICAgcGF0aWVudCA9PSAiUFQyIiAmIGdyZXBsKCJhY3V0ZWx5IHRyZWF0ZWQiLCBncm91cCkgfiAiQWN1dGVseSB0cmVhdGVkIiwKICAgIHBhdGllbnQgPT0gIlBUMiIgJiBncmVwbCgidHJlYXRtZW50IHdpdGhkciIsIGdyb3VwKSB+ICJUcmVhdG1lbnQgd2l0aGRyYXduIiwKICAgIHBhdGllbnQgPT0gIlBUMiIgJiBncmVwbCgiY2hyb25pY2FsbHkgdHJlYXRlZCIsIGdyb3VwKSB+ICJDaHJvbmljYWxseSB0cmVhdGVkIiwKICAgIHBhdGllbnQgPT0gIlBUMiIgJiBncmVwbCgicmVsYXBzZSIsIGdyb3VwKSB+ICJSZWxhcHNlIiwKICAgIFRSVUUgfiBncm91cAogICkpICU+JQogIGRwbHlyOjptdXRhdGUocGF0aWVudCA9IGZhY3RvcihwYXRpZW50KSwgZ3JvdXAgPSBmYWN0b3IoZ3JvdXApLCB0aXNzdWUgPSBmYWN0b3IodGlzc3VlKSkKCmJ1bGtfZGRzIDwtIERFU2VxMjo6REVTZXFEYXRhU2V0RnJvbU1hdHJpeChtZXJnZWRfZ2VuZV9jb3VudHMuYnVsaywKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNvbERhdGEgPSBzYW1wbGVfdGFibGUsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBkZXNpZ24gPSB+IGdyb3VwKQoKYnVsa192c3QgPC0gREVTZXEyOjp2c3QoYnVsa19kZHMpCnBjYS5wcmUxIDwtIERFU2VxMjo6cGxvdFBDQShidWxrX3ZzdFssIGNvbERhdGEoYnVsa192c3QpJHBhdGllbnQgPT0gIlBUMSJdLCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJQVDEiKQpwY2EucHJlMiA8LSBERVNlcTI6OnBsb3RQQ0EoYnVsa192c3RbLCBjb2xEYXRhKGJ1bGtfdnN0KSRwYXRpZW50ID09ICJQVDIiXSwgaW50Z3JvdXAgPSBjKCJwYXRpZW50IiwgImdyb3VwIikpICsKICBnZ3JlcGVsOjpnZW9tX3RleHRfcmVwZWwoYWVzKGxhYmVsID0gbmFtZSksIHNpemUgPSAyKSArCiAgZ2d0aXRsZSgiUFQyIikKcGNhLnByZTMgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0WywgY29sRGF0YShidWxrX3ZzdCkkcGF0aWVudCA9PSAiUFQxMiJdLCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJQVDEyIikKcGNhLnByZTQgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0WywgY29sRGF0YShidWxrX3ZzdCkkcGF0aWVudCA9PSAiUFQxMyJdLCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJQVDEzIikKcGNhLnByZTUgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0WywgY29sRGF0YShidWxrX3ZzdCkkcGF0aWVudCAlaW4lIGMoIlBUMSIsICJQVDEyIildLCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJQVDEgKyBQVDEyIikKcGNhLnByZTYgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0WywgY29sRGF0YShidWxrX3ZzdCkkcGF0aWVudCAlaW4lIGMoIlBUMSIsICJQVDEyIiwgIlBUMTMiKV0sIGludGdyb3VwID0gYygicGF0aWVudCIsICJncm91cCIpKSArCiAgZ2dyZXBlbDo6Z2VvbV90ZXh0X3JlcGVsKGFlcyhsYWJlbCA9IG5hbWUpLCBzaXplID0gMikgKwogIGdndGl0bGUoIlBUMSArIFBUMTIgKyBQVDEzIikKcGNhLnByZTcgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0LCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJBbGwgcGF0aWVudHMiKQoKcGNhLnByZTEKcGNhLnByZTIKcGNhLnByZTMKcGNhLnByZTQKcGNhLnByZTUKcGNhLnByZTYKcGNhLnByZTcKYGBgCgojIyBSZW1vdmluZyB0aGUgb3V0bGllcnMKCkxpc3Qgb2Ygb3V0bGllcnM6CgpgYGB7ciByZW1vdmluZ19vdXRsaWVyc30Kc2FtcGxlc190b19yZW1vdmUgPC0gYygiVlQxMV9ONzA1X1M1MDQiLCAjIE91dGxpZXIgaW4gUFQxCiAgICAgICAgICAgICAgICAgICAgICAgIlZUYjJfTjcwNl9TNTE3IiwgIyBBY3V0ZWx5IHRyZWF0ZWQgY2x1c3RlcmluZyB3aXRoIHVudHJlYXRlZAogICAgICAgICAgICAgICAgICAgICAgICJWVDQ3Yl9ONzA2X1M1MDMiICMgT3V0bGllciBpbiBQVDEyCiAgICAgICAgICAgICAgICAgICAgICAgKQoKc2FtcGxlX3RhYmxlICU+JQogIGZpbHRlcihzYW1wbGUgJWluJSBzYW1wbGVzX3RvX3JlbW92ZSkgJT4lCiAgZGF0YXRhYmxlKHJvd25hbWVzID0gRiwgb3B0aW9ucyA9IGxpc3QocGFnZUxlbmd0aCA9IDEwMCwgb3JkZXJpbmcgPSBGLCBkb20gPSAndCcpKQogIApzYW1wbGVfdGFibGUgPC0gc2FtcGxlX3RhYmxlICU+JSBmaWx0ZXIoIShzYW1wbGUgJWluJSBzYW1wbGVzX3RvX3JlbW92ZSkpCgptZXJnZWRfZ2VuZV9jb3VudHMuYnVsayA8LSBtZXJnZWRfZ2VuZV9jb3VudHMuYnVsa1ssIHNhbXBsZV90YWJsZSRzYW1wbGVdCgpidWxrX2RkcyA8LSBERVNlcTI6OkRFU2VxRGF0YVNldEZyb21NYXRyaXgobWVyZ2VkX2dlbmVfY291bnRzLmJ1bGssCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjb2xEYXRhID0gc2FtcGxlX3RhYmxlLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZGVzaWduID0gfiBncm91cCkKCmJ1bGtfdnN0IDwtIERFU2VxMjo6dnN0KGJ1bGtfZGRzKQoKcGNhLnBvc3QxIDwtIERFU2VxMjo6cGxvdFBDQShidWxrX3ZzdFssIGNvbERhdGEoYnVsa192c3QpJHBhdGllbnQgPT0gIlBUMSJdLCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJQVDEiKQpwY2EucG9zdDIgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0WywgY29sRGF0YShidWxrX3ZzdCkkcGF0aWVudCA9PSAiUFQyIl0sIGludGdyb3VwID0gYygicGF0aWVudCIsICJncm91cCIpKSArCiAgZ2dyZXBlbDo6Z2VvbV90ZXh0X3JlcGVsKGFlcyhsYWJlbCA9IG5hbWUpLCBzaXplID0gMikgKwogIGdndGl0bGUoIlBUMiIpCnBjYS5wb3N0MyA8LSBERVNlcTI6OnBsb3RQQ0EoYnVsa192c3RbLCBjb2xEYXRhKGJ1bGtfdnN0KSRwYXRpZW50ID09ICJQVDEyIl0sIGludGdyb3VwID0gYygicGF0aWVudCIsICJncm91cCIpKSArCiAgZ2dyZXBlbDo6Z2VvbV90ZXh0X3JlcGVsKGFlcyhsYWJlbCA9IG5hbWUpLCBzaXplID0gMikgKwogIGdndGl0bGUoIlBUMTIiKQpwY2EucG9zdDQgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0WywgY29sRGF0YShidWxrX3ZzdCkkcGF0aWVudCA9PSAiUFQxMyJdLCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJQVDEzIikKcGNhLnBvc3Q1IDwtIERFU2VxMjo6cGxvdFBDQShidWxrX3ZzdFssIGNvbERhdGEoYnVsa192c3QpJHBhdGllbnQgJWluJSBjKCJQVDEiLCAiUFQxMiIpXSwgaW50Z3JvdXAgPSBjKCJwYXRpZW50IiwgImdyb3VwIikpICsKICBnZ3JlcGVsOjpnZW9tX3RleHRfcmVwZWwoYWVzKGxhYmVsID0gbmFtZSksIHNpemUgPSAyKSArCiAgZ2d0aXRsZSgiUFQxICsgUFQxMiIpCnBjYS5wb3N0NiA8LSBERVNlcTI6OnBsb3RQQ0EoYnVsa192c3RbLCBjb2xEYXRhKGJ1bGtfdnN0KSRwYXRpZW50ICVpbiUgYygiUFQxIiwgIlBUMTIiLCAiUFQxMyIpXSwgaW50Z3JvdXAgPSBjKCJwYXRpZW50IiwgImdyb3VwIikpICsKICBnZ3JlcGVsOjpnZW9tX3RleHRfcmVwZWwoYWVzKGxhYmVsID0gbmFtZSksIHNpemUgPSAyKSArCiAgZ2d0aXRsZSgiUFQxICsgUFQxMiArIFBUMTMiKQpwY2EucG9zdDcgPC0gREVTZXEyOjpwbG90UENBKGJ1bGtfdnN0LCBpbnRncm91cCA9IGMoInBhdGllbnQiLCAiZ3JvdXAiKSkgKwogIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBuYW1lKSwgc2l6ZSA9IDIpICsKICBnZ3RpdGxlKCJBbGwgcGF0aWVudHMiKQpgYGAKCkFuZCBoZXJlIGFyZSB0aGUgUENBIHBsb3RzIGFmdGVyIGFuZCBiZWZvcmUgcmVtb3ZpbmcgdGhlIG91dGxpZXJzOgoKYGBge3IgY29tcGFyaXNvbl9iZWZvcmVfYWZ0ZXJfb3V0bGllcnMsIHJlc3VsdHM9J2FzaXMnfQpjYXQoIiMjIyB7LnRhYnNldCAudW5saXN0ZWQgLnVubnVtYmVyZWQgLnRvYy1pZ25vcmV9XG5cbiIpCmNhdCgiIyMjIyBCZWZvcmVcblxuIikKcGNhLnByZTEKY2F0KCIjIyMjIEFmdGVyIHsuYWN0aXZlfVxuXG4iKQpwY2EucG9zdDEKCmNhdCgiIyMjIHsudGFic2V0IC51bmxpc3RlZCAudW5udW1iZXJlZCAudG9jLWlnbm9yZX1cblxuIikKY2F0KCIjIyMjIEJlZm9yZVxuXG4iKQpwY2EucHJlMgpjYXQoIiMjIyMgQWZ0ZXIgey5hY3RpdmV9XG5cbiIpCnBjYS5wb3N0MgoKY2F0KCIjIyMgey50YWJzZXQgLnVubGlzdGVkIC51bm51bWJlcmVkIC50b2MtaWdub3JlfVxuXG4iKQpjYXQoIiMjIyMgQmVmb3JlXG5cbiIpCnBjYS5wcmUzCmNhdCgiIyMjIyBBZnRlciB7LmFjdGl2ZX1cblxuIikKcGNhLnBvc3QzCgpjYXQoIiMjIyB7LnRhYnNldCAudW5saXN0ZWQgLnVubnVtYmVyZWQgLnRvYy1pZ25vcmV9XG5cbiIpCmNhdCgiIyMjIyBCZWZvcmVcblxuIikKcGNhLnByZTQKY2F0KCIjIyMjIEFmdGVyIHsuYWN0aXZlfVxuXG4iKQpwY2EucG9zdDQKCmNhdCgiIyMjIHsudGFic2V0IC51bmxpc3RlZCAudW5udW1iZXJlZCAudG9jLWlnbm9yZX1cblxuIikKY2F0KCIjIyMjIEJlZm9yZVxuXG4iKQpwY2EucHJlNQpjYXQoIiMjIyMgQWZ0ZXIgey5hY3RpdmV9XG5cbiIpCnBjYS5wb3N0NQoKY2F0KCIjIyMgey50YWJzZXQgLnVubGlzdGVkIC51bm51bWJlcmVkIC50b2MtaWdub3JlfVxuXG4iKQpjYXQoIiMjIyMgQmVmb3JlXG5cbiIpCnBjYS5wcmU2CmNhdCgiIyMjIyBBZnRlciB7LmFjdGl2ZX1cblxuIikKcGNhLnBvc3Q2CgpjYXQoIiMjIyB7LnRhYnNldCAudW5saXN0ZWQgLnVubnVtYmVyZWQgLnRvYy1pZ25vcmV9XG5cbiIpCmNhdCgiIyMjIyBCZWZvcmVcblxuIikKcGNhLnByZTcKY2F0KCIjIyMjIEFmdGVyIHsuYWN0aXZlfVxuXG4iKQpwY2EucG9zdDcKYGBgCgoKIyMgU3RvcmluZyB0aGUgZGF0YQoKVGhlIGRhdGEgb2JqZWN0cyBzdG9yZWQgYXJlIGNhbGxlZDogYGJ1bGs0X2NvdW50c2AgYW5kIGBidWxrNF9kZHNgLgoKYGBge3J9CiMgU2F2ZSB0aGlzIGRhdGEgb2JqZWN0CnVzZXRoaXM6OnVzZV9kaXJlY3RvcnkoImRhdGEiKQpidWxrNF9jb3VudHMgPC0gbWVyZ2VkX2dlbmVfY291bnRzLmJ1bGsKc2F2ZShidWxrNF9jb3VudHMsIGZpbGUgPSAiZGF0YS9idWxrNF9jb3VudHMucmRhIikKCnVzZXRoaXM6OnVzZV9kaXJlY3RvcnkoImRhdGEiKQpidWxrNF9kZHMgPC0gYnVsa19kZHMKc2F2ZShidWxrNF9kZHMsIGZpbGUgPSAiZGF0YS9idWxrNF9kZHMucmRhIikKYGBgCgo=</div>
+
+<!-- Adjust MathJax settings so that all math formulae are shown using
+TeX fonts only; see
+http://docs.mathjax.org/en/latest/configuration.html.  This will make
+the presentation more consistent at the cost of the webpage sometimes
+taking slightly longer to load. Note that this only works because the
+footer is added to webpages before the MathJax javascript. -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+
+<!-- code folding -->
+<script>
+$(document).ready(function () {
+  window.initializeSourceEmbed("data-bulkRNAseq.Rmd");
+  window.initializeCodeFolding("hide" === "show");
+});
+</script>
+
+<script>
+$(document).ready(function ()  {
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_').toLowerCase();
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

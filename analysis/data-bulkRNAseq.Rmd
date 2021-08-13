@@ -1,0 +1,220 @@
+---
+title: "Data - Bulk RNAseq"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+```{r, message = F, warning = F}
+library(tidyverse)
+library(DESeq2)
+library(DT)
+# knitr::opts_chunk$set(cache = T, autodep = T)
+```
+
+
+This is based on merged_gene_counts.bulk.txt.gz and includes all four patients (PT1, PT2, PT12 and PT13). PT12 and PT13 were added at a later date and the data were re-processed all together from scratch with the NextFlow pipeline described above.
+
+## Initial filtering
+
+In this section, we remove:
+
+* genes that are not expressed in almost all samples. More precisely, we remove any gene that does not have at least 1 read count in at least 3 samples.
+* samples that do not have at least 20 genes expressed (min read counts > 0)
+
+Then we plot several PCA plots to identify outliers.
+
+```{r data_wrangling}
+merged_gene_counts.bulk <- read.table("data-raw/merged_gene_counts.bulk.txt.gz", row.names = 1, header = T)
+colnames(merged_gene_counts.bulk) <- gsub(".", "_", colnames(merged_gene_counts.bulk), fixed = T)
+sample_table <- read.csv("data-raw/sample_bulk_rna.csv", stringsAsFactors = F)
+
+
+# Identify genes that are not expressed in any sample
+minExpression <- 1
+minSamples <- 3
+genes_in_few_samples <- names(which(apply(merged_gene_counts.bulk >= minExpression, 1, sum) >= minSamples))
+merged_gene_counts.bulk <- merged_gene_counts.bulk[genes_in_few_samples, ]
+
+# Identify samples that don't have at least 20 genes expressed (very low hanging fruit)
+minExpression <- 1
+minGenes <- 20
+samples_with_few_genes <- names(which(apply(merged_gene_counts.bulk >= minExpression, 2, sum) < minGenes))
+samples_to_remove <- c(samples_with_few_genes)
+
+# Filter sample table
+sample_table <- sample_table %>% filter(!(title %in% samples_to_remove))
+
+# Filter counts matrix
+merged_gene_counts.bulk <- merged_gene_counts.bulk[, sample_table$title]
+
+# Data wrangling, from EGA metadata
+sample_table <- sample_table %>%
+  dplyr::rename(sample = title, patient = subjectId, group = description) %>%
+  dplyr::select(sample, patient, group) %>%
+  dplyr::mutate(tissue = case_when(
+    patient == "PT1" ~ "",
+    patient == "PT12" ~ "",
+    patient == "PT13" ~ "",
+    grepl("mouse bone marrow", group) ~ "BM",
+    grepl("mouse spleen", group) ~ "Spleen",
+    grepl("mouse brain", group) ~ "Brain",
+    TRUE ~ group
+  )) %>%
+  dplyr::mutate(group = case_when(
+    patient %in% c("PT1", "PT12", "PT13") & grepl("untreated", group) ~ "Untreated",
+    patient %in% c("PT1", "PT12", "PT13") & grepl("treated", group) ~ "Treated",
+    patient == "PT2" & grepl("untreated control", group) ~ "Never treated",
+    patient == "PT2" & grepl("acutely treated", group) ~ "Acutely treated",
+    patient == "PT2" & grepl("treatment withdr", group) ~ "Treatment withdrawn",
+    patient == "PT2" & grepl("chronically treated", group) ~ "Chronically treated",
+    patient == "PT2" & grepl("relapse", group) ~ "Relapse",
+    TRUE ~ group
+  )) %>%
+  dplyr::mutate(patient = factor(patient), group = factor(group), tissue = factor(tissue))
+
+bulk_dds <- DESeq2::DESeqDataSetFromMatrix(merged_gene_counts.bulk,
+                                           colData = sample_table,
+                                           design = ~ group)
+
+bulk_vst <- DESeq2::vst(bulk_dds)
+pca.pre1 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT1"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT1")
+pca.pre2 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT2"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT2")
+pca.pre3 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT12"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT12")
+pca.pre4 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT13"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT13")
+pca.pre5 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient %in% c("PT1", "PT12")], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT1 + PT12")
+pca.pre6 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient %in% c("PT1", "PT12", "PT13")], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT1 + PT12 + PT13")
+pca.pre7 <- DESeq2::plotPCA(bulk_vst, intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("All patients")
+
+pca.pre1
+pca.pre2
+pca.pre3
+pca.pre4
+pca.pre5
+pca.pre6
+pca.pre7
+```
+
+## Removing the outliers
+
+List of outliers:
+
+```{r removing_outliers}
+samples_to_remove <- c("VT11_N705_S504", # Outlier in PT1
+                       "VTb2_N706_S517", # Acutely treated clustering with untreated
+                       "VT47b_N706_S503" # Outlier in PT12
+                       )
+
+sample_table %>%
+  filter(sample %in% samples_to_remove) %>%
+  datatable(rownames = F, options = list(pageLength = 100, ordering = F, dom = 't'))
+  
+sample_table <- sample_table %>% filter(!(sample %in% samples_to_remove))
+
+merged_gene_counts.bulk <- merged_gene_counts.bulk[, sample_table$sample]
+
+bulk_dds <- DESeq2::DESeqDataSetFromMatrix(merged_gene_counts.bulk,
+                                           colData = sample_table,
+                                           design = ~ group)
+
+bulk_vst <- DESeq2::vst(bulk_dds)
+
+pca.post1 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT1"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT1")
+pca.post2 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT2"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT2")
+pca.post3 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT12"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT12")
+pca.post4 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient == "PT13"], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT13")
+pca.post5 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient %in% c("PT1", "PT12")], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT1 + PT12")
+pca.post6 <- DESeq2::plotPCA(bulk_vst[, colData(bulk_vst)$patient %in% c("PT1", "PT12", "PT13")], intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("PT1 + PT12 + PT13")
+pca.post7 <- DESeq2::plotPCA(bulk_vst, intgroup = c("patient", "group")) +
+  ggrepel::geom_text_repel(aes(label = name), size = 2) +
+  ggtitle("All patients")
+```
+
+And here are the PCA plots after and before removing the outliers:
+
+```{r comparison_before_after_outliers, results='asis'}
+cat("### {.tabset .unlisted .unnumbered .toc-ignore}\n\n")
+cat("#### Before\n\n")
+pca.pre1
+cat("#### After {.active}\n\n")
+pca.post1
+
+cat("### {.tabset .unlisted .unnumbered .toc-ignore}\n\n")
+cat("#### Before\n\n")
+pca.pre2
+cat("#### After {.active}\n\n")
+pca.post2
+
+cat("### {.tabset .unlisted .unnumbered .toc-ignore}\n\n")
+cat("#### Before\n\n")
+pca.pre3
+cat("#### After {.active}\n\n")
+pca.post3
+
+cat("### {.tabset .unlisted .unnumbered .toc-ignore}\n\n")
+cat("#### Before\n\n")
+pca.pre4
+cat("#### After {.active}\n\n")
+pca.post4
+
+cat("### {.tabset .unlisted .unnumbered .toc-ignore}\n\n")
+cat("#### Before\n\n")
+pca.pre5
+cat("#### After {.active}\n\n")
+pca.post5
+
+cat("### {.tabset .unlisted .unnumbered .toc-ignore}\n\n")
+cat("#### Before\n\n")
+pca.pre6
+cat("#### After {.active}\n\n")
+pca.post6
+
+cat("### {.tabset .unlisted .unnumbered .toc-ignore}\n\n")
+cat("#### Before\n\n")
+pca.pre7
+cat("#### After {.active}\n\n")
+pca.post7
+```
+
+
+## Storing the data
+
+The data objects stored are called: `bulk4_counts` and `bulk4_dds`.
+
+```{r}
+# Save this data object
+usethis::use_directory("data")
+bulk4_counts <- merged_gene_counts.bulk
+save(bulk4_counts, file = "data/bulk4_counts.rda")
+
+usethis::use_directory("data")
+bulk4_dds <- bulk_dds
+save(bulk4_dds, file = "data/bulk4_dds.rda")
+```
+
