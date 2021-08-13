@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>Bulk RNA-seq PCA</title>
+
+<script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/united.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/jqueryui-1.11.4/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<script src="site_libs/navigation-1.1/codefolding.js"></script>
+<script src="site_libs/navigation-1.1/sourceembed.js"></script>
+
+<link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/master/img/reproducible.png">
+<!-- Add a small amount of space between sections. -->
+<style type="text/css">
+div.section {
+  padding-top: 12px;
+}
+</style>
+
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css" data-origin="pandoc">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; background-color: #f8f8f8; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+pre, code { background-color: #f8f8f8; }
+code > span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+code > span.dt { color: #204a87; } /* DataType */
+code > span.dv { color: #0000cf; } /* DecVal */
+code > span.bn { color: #0000cf; } /* BaseN */
+code > span.fl { color: #0000cf; } /* Float */
+code > span.ch { color: #4e9a06; } /* Char */
+code > span.st { color: #4e9a06; } /* String */
+code > span.co { color: #8f5902; font-style: italic; } /* Comment */
+code > span.ot { color: #8f5902; } /* Other */
+code > span.al { color: #ef2929; } /* Alert */
+code > span.fu { color: #000000; } /* Function */
+code > span.er { color: #a40000; font-weight: bold; } /* Error */
+code > span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #000000; } /* Constant */
+code > span.sc { color: #000000; } /* SpecialChar */
+code > span.vs { color: #4e9a06; } /* VerbatimString */
+code > span.ss { color: #4e9a06; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #000000; } /* Variable */
+code > span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+code > span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+code > span.ex { } /* Extension */
+code > span.at { color: #c4a000; } /* Attribute */
+code > span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+code > span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+
+.sourceCode .row {
+  width: 100%;
+}
+.sourceCode {
+  overflow-x: auto;
+}
+.code-folding-btn {
+  margin-right: -30px;
+}
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+#rmd-source-code {
+  display: none;
+}
+</style>
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+</style>
+
+
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+  padding-top: 51px;
+  padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar)  */
+.section h1 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h2 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h3 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h4 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h5 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.section h6 {
+  padding-top: 56px;
+  margin-top: -56px;
+}
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #ffffff;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script>
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.parent().addClass('active');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+<style type="text/css">
+.code-folding-btn { margin-bottom: 4px; }
+</style>
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row-fluid">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Turati_NatCancer_2021</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="data-index.html">Data</a>
+</li>
+<li>
+  <a href="bulkRNA-index.html">Bulk RNA-seq</a>
+</li>
+<li>
+  <a href="scRNA-index.html">scRNA-seq</a>
+</li>
+<li>
+  <a href="scWGS-index.html">scWGS-seq</a>
+</li>
+<li>
+  <a href="methyl-index.html">Methylation</a>
+</li>
+<li>
+  <a href="about.html">About</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div class="fluid-row" id="header">
+
+<div class="btn-group pull-right">
+<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Code</span> <span class="caret"></span></button>
+<ul class="dropdown-menu" style="min-width: 50px;">
+<li><a id="rmd-show-all-code" href="#">Show All Code</a></li>
+<li><a id="rmd-hide-all-code" href="#">Hide All Code</a></li>
+<li role="separator" class="divider"></li>
+<li><a id="rmd-download-source" href="#">Download Rmd</a></li>
+</ul>
+</div>
+
+
+
+<h1 class="title toc-ignore">Bulk RNA-seq PCA</h1>
+
+</div>
+
+
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span> workflowr <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
+</button>
+</p>
+<div id="workflowr-report" class="collapse">
+<ul class="nav nav-tabs">
+<li class="active">
+<a data-toggle="tab" href="#summary">Summary</a>
+</li>
+<li>
+<a data-toggle="tab" href="#checks"> Checks <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> </a>
+</li>
+<li>
+<a data-toggle="tab" href="#versions">Past versions</a>
+</li>
+</ul>
+<div class="tab-content">
+<div id="summary" class="tab-pane fade in active">
+<p>
+<strong>Last updated:</strong> 2021-08-13
+</p>
+<p>
+<strong>Checks:</strong> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7 <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> 0
+</p>
+<p>
+<strong>Knit directory:</strong> <code>Turati_NatCancer_2021/</code> <span class="glyphicon glyphicon-question-sign" aria-hidden="true" title="This is the local directory in which the code in this file was executed."> </span>
+</p>
+<p>
+This reproducible <a href="http://rmarkdown.rstudio.com">R Markdown</a> analysis was created with <a
+  href="https://github.com/jdblischak/workflowr">workflowr</a> (version 1.6.2). The <em>Checks</em> tab describes the reproducibility checks that were applied when the results were created. The <em>Past versions</em> tab lists the development history.
+</p>
+<hr>
+</div>
+<div id="checks" class="tab-pane fade">
+<div id="workflowr-checks" class="panel-group">
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date </a>
+</p>
+</div>
+<div id="strongRMarkdownfilestronguptodate" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great! Since the R Markdown file has been committed to the Git repository, you know the exact version of the code that produced these results.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongEnvironmentstrongempty"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Environment:</strong> empty </a>
+</p>
+</div>
+<div id="strongEnvironmentstrongempty" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! The global environment was empty. Objects defined in the global environment can affect the analysis in your R Markdown file in unknown ways. For reproduciblity it’s best to always run the code in an empty environment.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSeedstrongcodesetseed20210812code"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Seed:</strong> <code>set.seed(20210812)</code> </a>
+</p>
+</div>
+<div id="strongSeedstrongcodesetseed20210812code" class="panel-collapse collapse">
+<div class="panel-body">
+<p>The command <code>set.seed(20210812)</code> was run prior to running the code in the R Markdown file. Setting a seed ensures that any results that rely on randomness, e.g. subsampling or permutations, are reproducible.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSessioninformationstrongrecorded"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Session information:</strong> recorded </a>
+</p>
+</div>
+<div id="strongSessioninformationstrongrecorded" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Recording the operating system, R version, and package versions is critical for reproducibility.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Cache:</strong> none </a>
+</p>
+</div>
+<div id="strongCachestrongnone" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Nice! There were no cached chunks for this analysis, so you can be confident that you successfully produced the results during this run.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongFilepathsstrongrelative"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>File paths:</strong> relative </a>
+</p>
+</div>
+<div id="strongFilepathsstrongrelative" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Using relative paths to the files within your workflowr project makes it easier to run your code on other machines.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree41eb61f9eb591020950fa69e083321c692a7d2aftargetblank41eb61fa"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/41eb61f9eb591020950fa69e083321c692a7d2af" target="_blank">41eb61f</a> </a>
+</p>
+</div>
+<div id="strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree41eb61f9eb591020950fa69e083321c692a7d2aftargetblank41eb61fa" class="panel-collapse collapse">
+<div class="panel-body">
+<p>
+Great! You are using Git for version control. Tracking code development and connecting the code version to the results is critical for reproducibility.
+</p>
+<p>
+The results in this page were generated with repository version <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/41eb61f9eb591020950fa69e083321c692a7d2af" target="_blank">41eb61f</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
+</p>
+<p>
+Note that you need to be careful to ensure that all relevant files for the analysis have been committed to Git prior to generating the results (you can use <code>wflow_publish</code> or <code>wflow_git_commit</code>). workflowr only checks the R Markdown file, but you know if there are other scripts or data files that it depends on. Below is the status of the Git repository when the results were generated:
+</p>
+<pre><code>
+Ignored files:
+    Ignored:    .Rhistory
+    Ignored:    .Rproj.user/
+
+Untracked files:
+    Untracked:  analysis/data-ancillary.Rmd
+    Untracked:  analysis/data-index2.Rmd
+    Untracked:  data-raw/12885_2017_3103_MOESM1_ESM.xlsx
+    Untracked:  data-raw/41586_2019_1652_MOESM3_ESM.xlsx
+    Untracked:  data-raw/PopSpecificSignatures_250.gmx
+    Untracked:  data-raw/cell_state.gmt
+    Untracked:  data-raw/pre-BI-pre-BII.gmt
+    Untracked:  data-raw/samples_summary.csv
+    Untracked:  data/bulk4_counts.rda
+    Untracked:  data/bulk4_dds.rda
+    Untracked:  data/paper_palette.rda
+    Untracked:  data/signatures.rda
+    Untracked:  docs2/
+    Untracked:  output/figures/
+    Untracked:  output/tables/
+
+Unstaged changes:
+    Modified:   bulkRNA/bulk-deseq2.Rmd
+
+</code></pre>
+<p>
+Note that any generated files, e.g. HTML, png, CSS, etc., are not included in this status report because it is ok for generated content to have uncommitted changes.
+</p>
+</div>
+</div>
+</div>
+</div>
+<hr>
+</div>
+<div id="versions" class="tab-pane fade">
+
+<p>
+These are the previous versions of the repository in which changes were made to the R Markdown (<code>analysis/bulkRNA-pca.Rmd</code>) and HTML (<code>docs/bulkRNA-pca.html</code>) files. If you’ve configured a remote Git repository (see <code>?wflow_git_remote</code>), click on the hyperlinks in the table below to view the files as they were in that past version.
+</p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/blob/41eb61f9eb591020950fa69e083321c692a7d2af/analysis/bulkRNA-pca.Rmd" target="_blank">41eb61f</a>
+</td>
+<td>
+Javier Herrero
+</td>
+<td>
+2021-08-13
+</td>
+<td>
+Adding Bulk RNAseq / PCA page
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</div>
+</div>
+</div>
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(ggbiplot)
+<span class="kw">library</span>(tidyverse)
+<span class="kw">library</span>(DESeq2)
+<span class="co"># knitr::opts_chunk$set(cache = T, autodep = T)</span></code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">num_of_genes.pca &lt;-<span class="st"> </span><span class="dv">1000</span></code></pre></div>
+<p>In this document, we are looking at the main components separating the samples, using PCA as an analyisis tool. We will use the top 1000 most variable genes.</p>
+<p>Please refer to the <a href="data-bulkRNAseq.html">Data - Bulk RNAseq</a> page for more info.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">data</span>(<span class="st">&quot;bulk4_dds&quot;</span>)
+<span class="kw">data</span>(<span class="st">&quot;paper_palette&quot;</span>)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">plot_PCAs_from_vst &lt;-<span class="st"> </span><span class="cf">function</span>(vst, <span class="dt">num.genes =</span> <span class="dv">1000</span>) {
+  gene_variance &lt;-<span class="st"> </span><span class="kw">rowVars</span>(<span class="kw">assay</span>(vst))
+
+  <span class="co"># select the 1000 top genes by variance</span>
+  selected_genes &lt;-<span class="st"> </span><span class="kw">order</span>(gene_variance, <span class="dt">decreasing=</span><span class="ot">TRUE</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">head</span>(<span class="dt">n =</span> num.genes)
+  
+  <span class="co"># perform a PCA on the data in assay(x) for the selected genes</span>
+  pca &lt;-<span class="st"> </span><span class="kw">prcomp</span>(<span class="kw">t</span>(<span class="kw">assay</span>(vst)[selected_genes, ]))
+  
+  pca_perc_variance &lt;-<span class="st"> </span><span class="kw">round</span>(<span class="dv">1000</span> <span class="op">*</span><span class="st"> </span>pca<span class="op">$</span>sdev<span class="op">^</span><span class="dv">2</span> <span class="op">/</span><span class="st"> </span><span class="kw">sum</span>(pca<span class="op">$</span>sdev<span class="op">^</span><span class="dv">2</span>)) <span class="op">/</span><span class="st"> </span><span class="dv">10</span>
+  
+  pcaData &lt;-<span class="st"> </span>pca<span class="op">$</span>x[, <span class="dv">1</span><span class="op">:</span><span class="dv">2</span>] <span class="op">%&gt;%</span>
+<span class="st">    </span><span class="kw">as.data.frame</span>() <span class="op">%&gt;%</span>
+<span class="st">    </span><span class="kw">rownames_to_column</span>(<span class="dt">var =</span> <span class="st">&quot;sample&quot;</span>) <span class="op">%&gt;%</span>
+<span class="st">    </span><span class="kw">left_join</span>(<span class="kw">colData</span>(vst) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">as_tibble</span>(), <span class="dt">by =</span> <span class="kw">c</span>(<span class="st">&quot;sample&quot;</span>))
+  
+  range_x &lt;-<span class="st"> </span><span class="kw">range</span>(pcaData<span class="op">$</span>PC1)
+  range_y &lt;-<span class="st"> </span><span class="kw">range</span>(pcaData<span class="op">$</span>PC2)
+  
+  <span class="cf">if</span> (<span class="kw">length</span>(<span class="kw">unique</span>(pcaData<span class="op">$</span>patient)) <span class="op">&gt;</span><span class="st"> </span><span class="dv">1</span>) {
+    ell_patients_groups &lt;-<span class="st"> </span>pcaData <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">group_by</span>(patient, group) <span class="op">%&gt;%</span>
+<span class="st">      </span>dplyr<span class="op">::</span><span class="kw">summarise</span>(<span class="dt">n =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(n <span class="op">&gt;</span><span class="st"> </span><span class="dv">2</span>)
+    ell &lt;-<span class="st"> </span><span class="kw">list</span>()
+    <span class="kw">apply</span>(ell_patients_groups, <span class="dv">1</span>, <span class="cf">function</span>(x) {
+      this_patient =<span class="st"> </span>x[<span class="dv">1</span>]
+      this_group =<span class="st"> </span>x[<span class="dv">2</span>]
+      data &lt;-<span class="st"> </span>pcaData <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(patient <span class="op">==</span><span class="st"> </span>this_patient <span class="op">&amp;</span><span class="st"> </span>group <span class="op">==</span><span class="st"> </span>this_group)
+      this_ell &lt;-<span class="st"> </span>car<span class="op">::</span><span class="kw">dataEllipse</span>(<span class="dt">x =</span> data<span class="op">$</span>PC1, <span class="dt">y =</span> data<span class="op">$</span>PC2,
+                                   <span class="dt">levels =</span> <span class="fl">0.68</span>, <span class="dt">segments =</span> <span class="dv">100</span>,
+                                   <span class="dt">draw =</span> F)
+      ell[[<span class="kw">paste</span>(this_patient, this_group)]] &lt;&lt;-
+<span class="st">        </span><span class="kw">tibble</span>(<span class="dt">patient =</span> this_patient, <span class="dt">group =</span> this_group,
+               <span class="dt">x =</span> this_ell[<span class="dv">1</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>], <span class="dt">y =</span> this_ell[<span class="dv">1</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">2</span>],
+             <span class="dt">xend =</span> this_ell[<span class="kw">c</span>(<span class="dv">2</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="dv">1</span>], <span class="dt">yend =</span> this_ell[<span class="kw">c</span>(<span class="dv">2</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="dv">2</span>])
+      
+    })
+    ell &lt;-<span class="st"> </span><span class="kw">Reduce</span>(rbind, ell)
+
+    g2 &lt;-<span class="st"> </span><span class="kw">ggplot</span>(pcaData, <span class="kw">aes</span>(PC1, PC2))
+    <span class="cf">if</span> (<span class="kw">length</span>(ell) <span class="op">&gt;</span><span class="st"> </span><span class="dv">0</span>) {
+      g2 &lt;-<span class="st"> </span>g2 <span class="op">+</span>
+<span class="st">        </span><span class="kw">geom_segment</span>(<span class="dt">data =</span> ell,
+                     <span class="kw">aes</span>(<span class="dt">x=</span>x, <span class="dt">y=</span>y, <span class="dt">xend=</span>xend, <span class="dt">yend=</span>yend,
+                         <span class="dt">group=</span>group, <span class="dt">col=</span>group, <span class="dt">linetype =</span> patient))
+    }
+    g2 &lt;-<span class="st"> </span>g2 <span class="op">+</span>
+<span class="st">      </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">col =</span> group, <span class="dt">shape =</span> patient), <span class="dt">size =</span> <span class="dv">3</span>) <span class="op">+</span>
+<span class="st">      </span><span class="co"># ggrepel::geom_text_repel(aes(label = sample), size = 2) +</span>
+<span class="st">      </span><span class="kw">xlab</span>(<span class="kw">paste0</span>(<span class="st">&quot;PC1: &quot;</span>, pca_perc_variance[<span class="dv">1</span>],<span class="st">&quot;% variance&quot;</span>)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">ylab</span>(<span class="kw">paste0</span>(<span class="st">&quot;PC2: &quot;</span>, pca_perc_variance[<span class="dv">2</span>],<span class="st">&quot;% variance&quot;</span>)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">scale_colour_manual</span>(<span class="dt">values =</span> paper_palette) <span class="op">+</span>
+<span class="st">      </span><span class="kw">scale_fill_manual</span>(<span class="dt">values =</span> paper_palette) <span class="op">+</span>
+<span class="st">      </span><span class="kw">coord_fixed</span>(<span class="dt">ratio =</span> <span class="kw">diff</span>(range_x) <span class="op">/</span><span class="st"> </span><span class="kw">diff</span>(range_y)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">theme_bw</span>(<span class="dt">base_line_size =</span> <span class="dv">0</span>)
+    g1 &lt;-<span class="st"> </span>g2 <span class="op">+</span>
+<span class="st">      </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> sample), <span class="dt">size =</span> <span class="dv">2</span>)
+
+    ell_groups &lt;-<span class="st"> </span>pcaData <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">group_by</span>(group) <span class="op">%&gt;%</span>
+<span class="st">      </span>dplyr<span class="op">::</span><span class="kw">summarise</span>(<span class="dt">n =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(n <span class="op">&gt;</span><span class="st"> </span><span class="dv">2</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">pull</span>(group)
+    ell &lt;-<span class="st"> </span><span class="kw">lapply</span>(ell_groups, <span class="cf">function</span>(name) {
+      data &lt;-<span class="st"> </span>pcaData <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(group <span class="op">==</span><span class="st"> </span>name)
+      car<span class="op">::</span><span class="kw">dataEllipse</span>(<span class="dt">x =</span> data<span class="op">$</span>PC1, <span class="dt">y =</span> data<span class="op">$</span>PC2,
+                       <span class="dt">levels =</span> <span class="fl">0.68</span>, <span class="dt">segments =</span> <span class="dv">100</span>,
+                       <span class="dt">draw =</span> F)
+    })
+    <span class="kw">names</span>(ell) &lt;-<span class="st"> </span>ell_groups
+    ell &lt;-<span class="st"> </span><span class="kw">lapply</span>(<span class="kw">names</span>(ell), <span class="cf">function</span>(name) {
+      <span class="kw">tibble</span>(<span class="dt">group =</span> name, <span class="dt">x =</span> ell[[name]][<span class="dv">1</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>], <span class="dt">y =</span> ell[[name]][<span class="dv">1</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">2</span>],
+             <span class="dt">xend =</span> ell[[name]][<span class="kw">c</span>(<span class="dv">2</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="dv">1</span>], <span class="dt">yend =</span> ell[[name]][<span class="kw">c</span>(<span class="dv">2</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="dv">2</span>])
+      })
+    ell &lt;-<span class="st"> </span><span class="kw">Reduce</span>(rbind, ell)
+    
+    g3 &lt;-<span class="st"> </span><span class="kw">ggplot</span>(pcaData, <span class="kw">aes</span>(PC1, PC2))
+    <span class="cf">if</span> (<span class="kw">length</span>(ell) <span class="op">&gt;</span><span class="st"> </span><span class="dv">0</span>) {
+      g3 &lt;-<span class="st"> </span>g3 <span class="op">+</span>
+<span class="st">        </span><span class="kw">geom_segment</span>(<span class="dt">data =</span> ell,
+                     <span class="kw">aes</span>(<span class="dt">x =</span> x, <span class="dt">y =</span> y, <span class="dt">xend =</span> xend, <span class="dt">yend =</span> yend,
+                         <span class="dt">group =</span> group, <span class="dt">col =</span> group))
+      
+    }
+    g3 &lt;-<span class="st"> </span>g3 <span class="op">+</span>
+<span class="st">      </span><span class="kw">stat_ellipse</span>(<span class="kw">aes</span>(<span class="dt">col =</span> group), <span class="dt">level =</span> <span class="fl">0.68</span>, <span class="dt">type =</span> <span class="st">&quot;norm&quot;</span>) <span class="op">+</span>
+<span class="st">      </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">col =</span> group, <span class="dt">shape =</span> patient), <span class="dt">size =</span> <span class="dv">3</span>) <span class="op">+</span>
+<span class="st">      </span><span class="co"># ggrepel::geom_text_repel(aes(label = sample), size = 2) +</span>
+<span class="st">      </span><span class="kw">xlab</span>(<span class="kw">paste0</span>(<span class="st">&quot;PC1: &quot;</span>, pca_perc_variance[<span class="dv">1</span>],<span class="st">&quot;% variance&quot;</span>)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">ylab</span>(<span class="kw">paste0</span>(<span class="st">&quot;PC2: &quot;</span>, pca_perc_variance[<span class="dv">2</span>],<span class="st">&quot;% variance&quot;</span>)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">scale_colour_manual</span>(<span class="dt">values =</span> paper_palette) <span class="op">+</span>
+<span class="st">      </span><span class="kw">scale_fill_manual</span>(<span class="dt">values =</span> paper_palette) <span class="op">+</span>
+<span class="st">      </span><span class="kw">coord_fixed</span>(<span class="dt">ratio =</span> <span class="kw">diff</span>(range_x) <span class="op">/</span><span class="st"> </span><span class="kw">diff</span>(range_y)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">theme_bw</span>(<span class="dt">base_line_size =</span> <span class="dv">0</span>)
+    
+    <span class="kw">print</span>(g1)
+    <span class="kw">print</span>(g2)
+    <span class="kw">print</span>(g3)
+    
+    <span class="kw">return</span>(<span class="kw">invisible</span>(<span class="kw">list</span>(pcaData, g1, g2, g3)))
+    
+  } <span class="cf">else</span> {
+    ell_groups &lt;-<span class="st"> </span>pcaData <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">group_by</span>(group) <span class="op">%&gt;%</span>
+<span class="st">      </span>dplyr<span class="op">::</span><span class="kw">summarise</span>(<span class="dt">n =</span> <span class="kw">n</span>()) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(n <span class="op">&gt;</span><span class="st"> </span><span class="dv">2</span>) <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">pull</span>(group)
+    ell &lt;-<span class="st"> </span><span class="kw">lapply</span>(ell_groups, <span class="cf">function</span>(name) {
+      data &lt;-<span class="st"> </span>pcaData <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(group <span class="op">==</span><span class="st"> </span>name)
+      car<span class="op">::</span><span class="kw">dataEllipse</span>(<span class="dt">x =</span> data<span class="op">$</span>PC1, <span class="dt">y =</span> data<span class="op">$</span>PC2,
+                       <span class="dt">levels =</span> <span class="fl">0.68</span>, <span class="dt">segments =</span> <span class="dv">100</span>,
+                       <span class="dt">draw =</span> F)
+    })
+    <span class="kw">names</span>(ell) &lt;-<span class="st"> </span>ell_groups
+    ell &lt;-<span class="st"> </span><span class="kw">lapply</span>(<span class="kw">names</span>(ell), <span class="cf">function</span>(name) {
+      <span class="kw">tibble</span>(<span class="dt">group =</span> name, <span class="dt">x =</span> ell[[name]][<span class="dv">1</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>], <span class="dt">y =</span> ell[[name]][<span class="dv">1</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">2</span>],
+             <span class="dt">xend =</span> ell[[name]][<span class="kw">c</span>(<span class="dv">2</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="dv">1</span>], <span class="dt">yend =</span> ell[[name]][<span class="kw">c</span>(<span class="dv">2</span><span class="op">:</span><span class="dv">100</span>, <span class="dv">1</span>), <span class="dv">2</span>])
+      })
+    ell &lt;-<span class="st"> </span><span class="kw">Reduce</span>(rbind, ell)
+
+    g2 &lt;-<span class="st"> </span><span class="kw">ggplot</span>(pcaData, <span class="kw">aes</span>(PC1, PC2))
+    <span class="cf">if</span> (<span class="kw">length</span>(ell) <span class="op">&gt;</span><span class="st"> </span><span class="dv">0</span>) {
+      g2 &lt;-<span class="st"> </span>g2 <span class="op">+</span>
+<span class="st">        </span><span class="kw">geom_segment</span>(<span class="dt">data =</span> ell,
+                     <span class="kw">aes</span>(<span class="dt">x =</span> x, <span class="dt">y =</span> y, <span class="dt">xend =</span> xend, <span class="dt">yend =</span> yend,
+                         <span class="dt">group =</span> group, <span class="dt">col =</span> group))
+      
+    }
+    g2 &lt;-<span class="st"> </span>g2 <span class="op">+</span>
+<span class="st">      </span><span class="kw">geom_point</span>(<span class="kw">aes</span>(<span class="dt">fill =</span> group), <span class="dt">shape =</span> <span class="dv">21</span>, <span class="dt">color =</span> <span class="st">&quot;black&quot;</span>, <span class="dt">size =</span> <span class="dv">3</span>) <span class="op">+</span>
+<span class="st">      </span><span class="kw">xlab</span>(<span class="kw">paste0</span>(<span class="st">&quot;PC1: &quot;</span>, pca_perc_variance[<span class="dv">1</span>],<span class="st">&quot;% variance&quot;</span>)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">ylab</span>(<span class="kw">paste0</span>(<span class="st">&quot;PC2: &quot;</span>, pca_perc_variance[<span class="dv">2</span>],<span class="st">&quot;% variance&quot;</span>)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">scale_colour_manual</span>(<span class="dt">values =</span> paper_palette) <span class="op">+</span>
+<span class="st">      </span><span class="kw">scale_fill_manual</span>(<span class="dt">values =</span> paper_palette) <span class="op">+</span>
+<span class="st">      </span><span class="kw">coord_fixed</span>(<span class="dt">ratio =</span> <span class="kw">diff</span>(range_x) <span class="op">/</span><span class="st"> </span><span class="kw">diff</span>(range_y)) <span class="op">+</span>
+<span class="st">      </span><span class="kw">theme_bw</span>(<span class="dt">base_line_size =</span> <span class="dv">0</span>)
+    g1 &lt;-<span class="st"> </span>g2 <span class="op">+</span>
+<span class="st">      </span>ggrepel<span class="op">::</span><span class="kw">geom_text_repel</span>(<span class="kw">aes</span>(<span class="dt">label =</span> sample), <span class="dt">size =</span> <span class="dv">2</span>)
+
+    <span class="kw">print</span>(g1)
+    <span class="kw">print</span>(g2)
+
+    <span class="kw">return</span>(<span class="kw">invisible</span>(<span class="kw">list</span>(pcaData, g1, g2)))
+  
+  }
+  
+}</code></pre></div>
+<p>We transform the data all together with the VST transformation function. This essentially log-transforms the counts while taking into account the library size (see DESeq2 manual for more info).</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bulk4_vst &lt;-<span class="st"> </span><span class="kw">vst</span>(bulk4_dds)</code></pre></div>
+</div>
+<div id="treated-vs-untreated-samples" class="section level2">
+<h2>Treated vs untreated samples</h2>
+<div id="all-samples" class="section level3">
+<h3>All samples</h3>
+<p>This is the initial PCA, built from the <code>bulk4_dds</code> data set, using VST-transformed counts.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">this_bulk_vst &lt;-<span class="st"> </span>bulk4_vst[, <span class="kw">colData</span>(bulk4_dds)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>, <span class="st">&quot;PT12&quot;</span>, <span class="st">&quot;PT13&quot;</span>)]
+this_bulk_vst<span class="op">$</span>patient &lt;-<span class="st"> </span><span class="kw">factor</span>(<span class="kw">c</span>(<span class="st">&quot;Pt1&quot;</span>, <span class="st">&quot;Pt2&quot;</span>, <span class="st">&quot;Pt12&quot;</span>, <span class="st">&quot;Pt13&quot;</span>)[<span class="kw">as.numeric</span>(this_bulk_vst<span class="op">$</span>patient)])
+plots &lt;-<span class="st"> </span><span class="kw">plot_PCAs_from_vst</span>(this_bulk_vst)</code></pre></div>
+<pre><code>`summarise()` regrouping output by &#39;patient&#39; (override with `.groups` argument)</code></pre>
+<pre><code>`summarise()` ungrouping output (override with `.groups` argument)</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated-1.png" width="672" style="display: block; margin: auto;" /><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated-2.png" width="672" style="display: block; margin: auto;" /><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated-3.png" width="672" style="display: block; margin: auto;" /></p>
+<div id="extended-figure-5a" class="section level4">
+<h4>Extended Figure 5a</h4>
+<div class="alert alert-info">
+The next chunk of code save the ExtFig5a figure and associated data into the <code>output</code> folder
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">plots[[<span class="dv">4</span>]] <span class="op">+</span>
+<span class="st">  </span><span class="kw">coord_cartesian</span>() <span class="op">+</span>
+<span class="st">  </span><span class="kw">guides</span>(<span class="dt">color =</span> <span class="st">&quot;none&quot;</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">guides</span>(<span class="dt">shape =</span> <span class="kw">guide_legend</span>(<span class="dt">title =</span> <span class="st">&quot;Patient&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span><span class="kw">theme</span>(<span class="dt">legend.position =</span> <span class="st">&quot;top&quot;</span>)</code></pre></div>
+<pre><code>Coordinate system already present. Adding new coordinate system, which will replace the existing one.</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/save_extfig_5a-1.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ggsave</span>(<span class="st">&quot;output/figures/ExtFig5a_pca_3patients.pdf&quot;</span>,
+       <span class="dt">device =</span> <span class="st">&quot;pdf&quot;</span>, <span class="dt">width =</span> <span class="dv">5</span>, <span class="dt">height =</span> <span class="dv">4</span>, <span class="dt">scale =</span> <span class="fl">0.8</span>)
+
+excel_data &lt;-<span class="st"> </span>plots[[<span class="dv">1</span>]]
+
+wb &lt;-<span class="st"> </span>openxlsx<span class="op">::</span><span class="kw">createWorkbook</span>()
+ws &lt;-<span class="st"> </span>openxlsx<span class="op">::</span><span class="kw">addWorksheet</span>(wb, <span class="st">&quot;ExtFig5a PCA bulk RNAseq&quot;</span>)
+
+openxlsx<span class="op">::</span><span class="kw">writeDataTable</span>(wb, <span class="dt">sheet =</span> ws, <span class="dt">x =</span> excel_data,
+               <span class="dt">rowNames =</span> F, <span class="dt">tableStyle =</span> <span class="st">&quot;none&quot;</span>, <span class="dt">withFilter =</span> F)
+openxlsx<span class="op">::</span><span class="kw">setColWidths</span>(wb, ws, <span class="dt">cols =</span> <span class="dv">1</span><span class="op">:</span><span class="kw">ncol</span>(excel_data), <span class="dt">widths =</span> <span class="st">&quot;auto&quot;</span>)
+openxlsx<span class="op">::</span><span class="kw">addStyle</span>(wb, ws, <span class="dt">rows =</span> <span class="dv">1</span>, <span class="dt">cols =</span> <span class="dv">1</span><span class="op">:</span><span class="kw">ncol</span>(excel_data),
+                   <span class="dt">style =</span> openxlsx<span class="op">::</span><span class="kw">createStyle</span>(<span class="dt">textDecoration =</span> <span class="st">&quot;bold&quot;</span>))
+openxlsx<span class="op">::</span><span class="kw">addStyle</span>(wb, ws, <span class="dt">rows =</span> <span class="dv">1</span><span class="op">:</span><span class="kw">nrow</span>(excel_data) <span class="op">+</span><span class="st"> </span><span class="dv">1</span>, <span class="dt">cols =</span> <span class="dv">1</span>,
+                   <span class="dt">style =</span> openxlsx<span class="op">::</span><span class="kw">createStyle</span>(<span class="dt">textDecoration =</span> <span class="st">&quot;bold&quot;</span>))
+
+openxlsx<span class="op">::</span><span class="kw">saveWorkbook</span>(wb, <span class="st">&quot;output/tables/ExtFig5a_bulkRNAseq_data.xlsx&quot;</span>, <span class="dt">overwrite =</span> <span class="ot">TRUE</span>)</code></pre></div>
+</div>
+</div>
+<div id="pt1-only" class="section level3">
+<h3>PT1 only</h3>
+<p>Same as above, but using samples from PT1 only.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">this_bulk_vst &lt;-<span class="st"> </span>bulk4_vst[, <span class="kw">colData</span>(bulk4_dds)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT1&quot;</span>)]
+<span class="kw">plot_PCAs_from_vst</span>(this_bulk_vst)</code></pre></div>
+<pre><code>`summarise()` ungrouping output (override with `.groups` argument)</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated.pt1-1.png" width="672" style="display: block; margin: auto;" /><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated.pt1-2.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="pt12-only" class="section level3">
+<h3>PT12 only</h3>
+<p>Same as above, but using samples from PT12 only.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">this_bulk_vst &lt;-<span class="st"> </span>bulk4_vst[, <span class="kw">colData</span>(bulk4_dds)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT12&quot;</span>)]
+<span class="kw">plot_PCAs_from_vst</span>(this_bulk_vst)</code></pre></div>
+<pre><code>`summarise()` ungrouping output (override with `.groups` argument)</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated.pt12-1.png" width="672" style="display: block; margin: auto;" /><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated.pt12-2.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="pt13-only" class="section level3">
+<h3>PT13 only</h3>
+<p>Same as above, but using samples from PT13 only.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">this_bulk_vst &lt;-<span class="st"> </span>bulk4_vst[, <span class="kw">colData</span>(bulk4_dds)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT13&quot;</span>)]
+<span class="kw">plot_PCAs_from_vst</span>(this_bulk_vst)</code></pre></div>
+<pre><code>`summarise()` ungrouping output (override with `.groups` argument)</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated.pt13-1.png" width="672" style="display: block; margin: auto;" /><img src="figure/bulkRNA-pca.Rmd/treated_vs_untreated.pt13-2.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="treatment-response-experiment" class="section level2">
+<h2>Treatment response experiment</h2>
+<p>This is the initial PCA, built from the <code>bulk4_dds</code> data set, using VST-transformed counts. The data correspond to PT2, where we have five types of samples:</p>
+<ul>
+<li>untreated</li>
+<li>treatment withdrawn</li>
+<li>chronically treated</li>
+<li>acutely treated</li>
+<li>relapse (let to relapse)</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">this_bulk_vst &lt;-<span class="st"> </span>bulk4_vst[, <span class="kw">colData</span>(bulk4_dds)<span class="op">$</span>patient <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;PT2&quot;</span>)]
+hack_bulk_vst &lt;-<span class="st"> </span>this_bulk_vst
+hack_bulk_vst<span class="op">$</span>patient &lt;-<span class="st"> </span>hack_bulk_vst<span class="op">$</span>tissue
+plots &lt;-<span class="st"> </span><span class="kw">plot_PCAs_from_vst</span>(hack_bulk_vst)</code></pre></div>
+<pre><code>`summarise()` regrouping output by &#39;patient&#39; (override with `.groups` argument)</code></pre>
+<pre><code>`summarise()` ungrouping output (override with `.groups` argument)</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/treatment_response-1.png" width="672" style="display: block; margin: auto;" /><img src="figure/bulkRNA-pca.Rmd/treatment_response-2.png" width="672" style="display: block; margin: auto;" /></p>
+<pre><code>Too few points to calculate an ellipse</code></pre>
+<pre><code>Warning: Removed 1 row(s) containing missing values (geom_path).</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/treatment_response-3.png" width="672" style="display: block; margin: auto;" /></p>
+<div id="extended-figure-5b" class="section level4">
+<h4>Extended Figure 5b</h4>
+<div class="alert alert-info">
+The next chunk of code save the ExtFig5b figure and associated data into the <code>output</code> folder
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">plots[[<span class="dv">4</span>]] <span class="op">+</span>
+<span class="st">  </span><span class="kw">coord_cartesian</span>() <span class="op">+</span>
+<span class="st">  </span><span class="kw">guides</span>(<span class="dt">color =</span> <span class="st">&quot;none&quot;</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">guides</span>(<span class="dt">fill =</span> <span class="st">&quot;none&quot;</span>) <span class="op">+</span>
+<span class="st">  </span><span class="kw">guides</span>(<span class="dt">shape =</span> <span class="kw">guide_legend</span>(<span class="dt">title =</span> <span class="st">&quot;Tissue&quot;</span>)) <span class="op">+</span>
+<span class="st">  </span><span class="kw">theme</span>(<span class="dt">legend.position =</span> <span class="st">&quot;top&quot;</span>)</code></pre></div>
+<pre><code>Coordinate system already present. Adding new coordinate system, which will replace the existing one.</code></pre>
+<pre><code>Too few points to calculate an ellipse</code></pre>
+<pre><code>Warning: Removed 1 row(s) containing missing values (geom_path).</code></pre>
+<p><img src="figure/bulkRNA-pca.Rmd/save_extfig_5b-1.png" width="672" style="display: block; margin: auto;" /></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ggsave</span>(<span class="st">&quot;output/figures/ExtFig5b_pca_treatment_response.pdf&quot;</span>,
+       <span class="dt">device =</span> <span class="st">&quot;pdf&quot;</span>, <span class="dt">width =</span> <span class="dv">6</span>, <span class="dt">height =</span> <span class="dv">4</span>, <span class="dt">scale =</span> <span class="fl">0.8</span>)</code></pre></div>
+<pre><code>Too few points to calculate an ellipse</code></pre>
+<pre><code>Warning: Removed 1 row(s) containing missing values (geom_path).</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">excel_data &lt;-<span class="st"> </span>plots[[<span class="dv">1</span>]]
+
+wb &lt;-<span class="st"> </span>openxlsx<span class="op">::</span><span class="kw">createWorkbook</span>()
+ws &lt;-<span class="st"> </span>openxlsx<span class="op">::</span><span class="kw">addWorksheet</span>(wb, <span class="st">&quot;ExtFig5b PCA bulk RNAseq&quot;</span>)
+
+openxlsx<span class="op">::</span><span class="kw">writeDataTable</span>(wb, <span class="dt">sheet =</span> ws, <span class="dt">x =</span> excel_data,
+               <span class="dt">rowNames =</span> F, <span class="dt">tableStyle =</span> <span class="st">&quot;none&quot;</span>, <span class="dt">withFilter =</span> F)
+openxlsx<span class="op">::</span><span class="kw">setColWidths</span>(wb, ws, <span class="dt">cols =</span> <span class="dv">1</span><span class="op">:</span><span class="kw">ncol</span>(excel_data), <span class="dt">widths =</span> <span class="st">&quot;auto&quot;</span>)
+openxlsx<span class="op">::</span><span class="kw">addStyle</span>(wb, ws, <span class="dt">rows =</span> <span class="dv">1</span>, <span class="dt">cols =</span> <span class="dv">1</span><span class="op">:</span><span class="kw">ncol</span>(excel_data),
+                   <span class="dt">style =</span> openxlsx<span class="op">::</span><span class="kw">createStyle</span>(<span class="dt">textDecoration =</span> <span class="st">&quot;bold&quot;</span>))
+openxlsx<span class="op">::</span><span class="kw">addStyle</span>(wb, ws, <span class="dt">rows =</span> <span class="dv">1</span><span class="op">:</span><span class="kw">nrow</span>(excel_data) <span class="op">+</span><span class="st"> </span><span class="dv">1</span>, <span class="dt">cols =</span> <span class="dv">1</span>,
+                   <span class="dt">style =</span> openxlsx<span class="op">::</span><span class="kw">createStyle</span>(<span class="dt">textDecoration =</span> <span class="st">&quot;bold&quot;</span>))
+
+openxlsx<span class="op">::</span><span class="kw">saveWorkbook</span>(wb, <span class="st">&quot;output/tables/ExtFig5b_bulkRNAseq_data.xlsx&quot;</span>, <span class="dt">overwrite =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<br>
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-sessioninfo" data-toggle="collapse" data-target="#workflowr-sessioninfo" style="display: block;">
+<span class="glyphicon glyphicon-wrench" aria-hidden="true"></span> Session information
+</button>
+</p>
+<div id="workflowr-sessioninfo" class="collapse">
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">sessionInfo</span>()</code></pre></div>
+<pre><code>R version 3.6.3 (2020-02-29)
+Platform: x86_64-apple-darwin15.6.0 (64-bit)
+Running under: macOS Catalina 10.15.7
+
+Matrix products: default
+BLAS:   /Library/Frameworks/R.framework/Versions/3.6/Resources/lib/libRblas.0.dylib
+LAPACK: /Library/Frameworks/R.framework/Versions/3.6/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_GB.UTF-8/en_GB.UTF-8/en_GB.UTF-8/C/en_GB.UTF-8/en_GB.UTF-8
+
+attached base packages:
+ [1] parallel  stats4    grid      stats     graphics  grDevices utils    
+ [8] datasets  methods   base     
+
+other attached packages:
+ [1] DESeq2_1.26.0               SummarizedExperiment_1.16.1
+ [3] DelayedArray_0.12.3         BiocParallel_1.20.1        
+ [5] matrixStats_0.56.0          Biobase_2.46.0             
+ [7] GenomicRanges_1.38.0        GenomeInfoDb_1.22.0        
+ [9] IRanges_2.20.2              S4Vectors_0.24.4           
+[11] BiocGenerics_0.32.0         forcats_0.5.0              
+[13] stringr_1.4.0               dplyr_1.0.0                
+[15] purrr_0.3.3                 readr_1.3.1                
+[17] tidyr_1.0.2                 tibble_2.1.3               
+[19] tidyverse_1.3.0             ggbiplot_0.55              
+[21] scales_1.1.0                plyr_1.8.6                 
+[23] ggplot2_3.3.1              
+
+loaded via a namespace (and not attached):
+  [1] colorspace_1.4-1       ellipsis_0.3.0         rio_0.5.16            
+  [4] rprojroot_1.3-2        htmlTable_1.13.3       XVector_0.26.0        
+  [7] base64enc_0.1-3        fs_1.3.2               rstudioapi_0.11       
+ [10] farver_2.0.3           ggrepel_0.8.2          bit64_0.9-7           
+ [13] AnnotationDbi_1.48.0   lubridate_1.7.4        xml2_1.2.5            
+ [16] splines_3.6.3          geneplotter_1.64.0     knitr_1.28            
+ [19] Formula_1.2-3          jsonlite_1.6.1         workflowr_1.6.2       
+ [22] broom_0.5.5            annotate_1.64.0        cluster_2.1.0         
+ [25] dbplyr_1.4.2           png_0.1-7              compiler_3.6.3        
+ [28] httr_1.4.1             backports_1.1.5        assertthat_0.2.1      
+ [31] Matrix_1.2-18          cli_3.0.0              later_1.0.0           
+ [34] acepack_1.4.1          htmltools_0.5.1.1      tools_3.6.3           
+ [37] gtable_0.3.0           glue_1.3.2             GenomeInfoDbData_1.2.2
+ [40] Rcpp_1.0.4             carData_3.0-3          cellranger_1.1.0      
+ [43] vctrs_0.3.0            nlme_3.1-145           xfun_0.16             
+ [46] openxlsx_4.1.4         rvest_0.3.5            lifecycle_0.2.0       
+ [49] XML_3.99-0.3           zlibbioc_1.32.0        hms_0.5.3             
+ [52] promises_1.1.0         RColorBrewer_1.1-2     curl_4.3              
+ [55] yaml_2.2.1             memoise_1.1.0          gridExtra_2.3         
+ [58] rpart_4.1-15           latticeExtra_0.6-29    stringi_1.4.6         
+ [61] RSQLite_2.2.0          genefilter_1.68.0      checkmate_2.0.0       
+ [64] zip_2.2.0              rlang_0.4.11           pkgconfig_2.0.3       
+ [67] bitops_1.0-6           evaluate_0.14          lattice_0.20-40       
+ [70] labeling_0.3           htmlwidgets_1.5.1      bit_1.1-15.2          
+ [73] tidyselect_1.1.0       magrittr_1.5           R6_2.4.1              
+ [76] generics_0.0.2         Hmisc_4.3-1            DBI_1.1.0             
+ [79] pillar_1.4.3           haven_2.2.0            whisker_0.4           
+ [82] foreign_0.8-76         withr_2.4.2            abind_1.4-5           
+ [85] survival_3.1-11        RCurl_1.98-1.1         nnet_7.3-13           
+ [88] car_3.0-8              modelr_0.1.6           crayon_1.3.4          
+ [91] rmarkdown_2.1          jpeg_0.1-8.1           locfit_1.5-9.1        
+ [94] readxl_1.3.1           data.table_1.12.8      blob_1.2.1            
+ [97] git2r_0.26.1           reprex_0.3.0           digest_0.6.25         
+[100] xtable_1.8-4           httpuv_1.5.2           munsell_0.5.0         </code></pre>
+</div>
+</div>
+</div>
+
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiQnVsayBSTkEtc2VxIFBDQSIKb3V0cHV0OiB3b3JrZmxvd3I6OndmbG93X2h0bWwKZWRpdG9yX29wdGlvbnM6CiAgY2h1bmtfb3V0cHV0X3R5cGU6IGNvbnNvbGUKLS0tCgojIyBJbnRyb2R1Y3Rpb24KCmBgYHtyLCBtZXNzYWdlID0gRkFMU0UsIHdhcm5pbmcgPSBGfQpsaWJyYXJ5KGdnYmlwbG90KQpsaWJyYXJ5KHRpZHl2ZXJzZSkKbGlicmFyeShERVNlcTIpCiMga25pdHI6Om9wdHNfY2h1bmskc2V0KGNhY2hlID0gVCwgYXV0b2RlcCA9IFQpCmBgYAoKYGBge3Igc2V0X251bV9vZl9nZW5lc19mb3JfcGNhfQpudW1fb2ZfZ2VuZXMucGNhIDwtIDEwMDAKYGBgCgpJbiB0aGlzIGRvY3VtZW50LCB3ZSBhcmUgbG9va2luZyBhdCB0aGUgbWFpbiBjb21wb25lbnRzIHNlcGFyYXRpbmcgdGhlIHNhbXBsZXMsIHVzaW5nIFBDQSBhcyBhbiBhbmFseWlzaXMgdG9vbC4gV2Ugd2lsbCB1c2UgdGhlIHRvcCBgciBudW1fb2ZfZ2VuZXMucGNhYCBtb3N0IHZhcmlhYmxlIGdlbmVzLgoKUGxlYXNlIHJlZmVyIHRvIHRoZSBbRGF0YSAtIEJ1bGsgUk5Bc2VxXShkYXRhLWJ1bGtSTkFzZXEuaHRtbCkgcGFnZSBmb3IgbW9yZSBpbmZvLgoKYGBge3IgcmVhZF9kYXRhfQpkYXRhKCJidWxrNF9kZHMiKQpkYXRhKCJwYXBlcl9wYWxldHRlIikKYGBgCgpgYGB7ciBmdW5jdGlvbl9wbG90X1BDQXNfZnJvbV92c3R9CnBsb3RfUENBc19mcm9tX3ZzdCA8LSBmdW5jdGlvbih2c3QsIG51bS5nZW5lcyA9IDEwMDApIHsKICBnZW5lX3ZhcmlhbmNlIDwtIHJvd1ZhcnMoYXNzYXkodnN0KSkKCiAgIyBzZWxlY3QgdGhlIDEwMDAgdG9wIGdlbmVzIGJ5IHZhcmlhbmNlCiAgc2VsZWN0ZWRfZ2VuZXMgPC0gb3JkZXIoZ2VuZV92YXJpYW5jZSwgZGVjcmVhc2luZz1UUlVFKSAlPiUgaGVhZChuID0gbnVtLmdlbmVzKQogIAogICMgcGVyZm9ybSBhIFBDQSBvbiB0aGUgZGF0YSBpbiBhc3NheSh4KSBmb3IgdGhlIHNlbGVjdGVkIGdlbmVzCiAgcGNhIDwtIHByY29tcCh0KGFzc2F5KHZzdClbc2VsZWN0ZWRfZ2VuZXMsIF0pKQogIAogIHBjYV9wZXJjX3ZhcmlhbmNlIDwtIHJvdW5kKDEwMDAgKiBwY2Ekc2Rldl4yIC8gc3VtKHBjYSRzZGV2XjIpKSAvIDEwCiAgCiAgcGNhRGF0YSA8LSBwY2EkeFssIDE6Ml0gJT4lCiAgICBhcy5kYXRhLmZyYW1lKCkgJT4lCiAgICByb3duYW1lc190b19jb2x1bW4odmFyID0gInNhbXBsZSIpICU+JQogICAgbGVmdF9qb2luKGNvbERhdGEodnN0KSAlPiUgYXNfdGliYmxlKCksIGJ5ID0gYygic2FtcGxlIikpCiAgCiAgcmFuZ2VfeCA8LSByYW5nZShwY2FEYXRhJFBDMSkKICByYW5nZV95IDwtIHJhbmdlKHBjYURhdGEkUEMyKQogIAogIGlmIChsZW5ndGgodW5pcXVlKHBjYURhdGEkcGF0aWVudCkpID4gMSkgewogICAgZWxsX3BhdGllbnRzX2dyb3VwcyA8LSBwY2FEYXRhICU+JSBncm91cF9ieShwYXRpZW50LCBncm91cCkgJT4lCiAgICAgIGRwbHlyOjpzdW1tYXJpc2UobiA9IG4oKSkgJT4lIGZpbHRlcihuID4gMikKICAgIGVsbCA8LSBsaXN0KCkKICAgIGFwcGx5KGVsbF9wYXRpZW50c19ncm91cHMsIDEsIGZ1bmN0aW9uKHgpIHsKICAgICAgdGhpc19wYXRpZW50ID0geFsxXQogICAgICB0aGlzX2dyb3VwID0geFsyXQogICAgICBkYXRhIDwtIHBjYURhdGEgJT4lIGZpbHRlcihwYXRpZW50ID09IHRoaXNfcGF0aWVudCAmIGdyb3VwID09IHRoaXNfZ3JvdXApCiAgICAgIHRoaXNfZWxsIDwtIGNhcjo6ZGF0YUVsbGlwc2UoeCA9IGRhdGEkUEMxLCB5ID0gZGF0YSRQQzIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgbGV2ZWxzID0gMC42OCwgc2VnbWVudHMgPSAxMDAsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZHJhdyA9IEYpCiAgICAgIGVsbFtbcGFzdGUodGhpc19wYXRpZW50LCB0aGlzX2dyb3VwKV1dIDw8LQogICAgICAgIHRpYmJsZShwYXRpZW50ID0gdGhpc19wYXRpZW50LCBncm91cCA9IHRoaXNfZ3JvdXAsCiAgICAgICAgICAgICAgIHggPSB0aGlzX2VsbFsxOjEwMCwgMV0sIHkgPSB0aGlzX2VsbFsxOjEwMCwgMl0sCiAgICAgICAgICAgICB4ZW5kID0gdGhpc19lbGxbYygyOjEwMCwgMSksIDFdLCB5ZW5kID0gdGhpc19lbGxbYygyOjEwMCwgMSksIDJdKQogICAgICAKICAgIH0pCiAgICBlbGwgPC0gUmVkdWNlKHJiaW5kLCBlbGwpCgogICAgZzIgPC0gZ2dwbG90KHBjYURhdGEsIGFlcyhQQzEsIFBDMikpCiAgICBpZiAobGVuZ3RoKGVsbCkgPiAwKSB7CiAgICAgIGcyIDwtIGcyICsKICAgICAgICBnZW9tX3NlZ21lbnQoZGF0YSA9IGVsbCwKICAgICAgICAgICAgICAgICAgICAgYWVzKHg9eCwgeT15LCB4ZW5kPXhlbmQsIHllbmQ9eWVuZCwKICAgICAgICAgICAgICAgICAgICAgICAgIGdyb3VwPWdyb3VwLCBjb2w9Z3JvdXAsIGxpbmV0eXBlID0gcGF0aWVudCkpCiAgICB9CiAgICBnMiA8LSBnMiArCiAgICAgIGdlb21fcG9pbnQoYWVzKGNvbCA9IGdyb3VwLCBzaGFwZSA9IHBhdGllbnQpLCBzaXplID0gMykgKwogICAgICAjIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBzYW1wbGUpLCBzaXplID0gMikgKwogICAgICB4bGFiKHBhc3RlMCgiUEMxOiAiLCBwY2FfcGVyY192YXJpYW5jZVsxXSwiJSB2YXJpYW5jZSIpKSArCiAgICAgIHlsYWIocGFzdGUwKCJQQzI6ICIsIHBjYV9wZXJjX3ZhcmlhbmNlWzJdLCIlIHZhcmlhbmNlIikpICsKICAgICAgc2NhbGVfY29sb3VyX21hbnVhbCh2YWx1ZXMgPSBwYXBlcl9wYWxldHRlKSArCiAgICAgIHNjYWxlX2ZpbGxfbWFudWFsKHZhbHVlcyA9IHBhcGVyX3BhbGV0dGUpICsKICAgICAgY29vcmRfZml4ZWQocmF0aW8gPSBkaWZmKHJhbmdlX3gpIC8gZGlmZihyYW5nZV95KSkgKwogICAgICB0aGVtZV9idyhiYXNlX2xpbmVfc2l6ZSA9IDApCiAgICBnMSA8LSBnMiArCiAgICAgIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBzYW1wbGUpLCBzaXplID0gMikKCiAgICBlbGxfZ3JvdXBzIDwtIHBjYURhdGEgJT4lIGdyb3VwX2J5KGdyb3VwKSAlPiUKICAgICAgZHBseXI6OnN1bW1hcmlzZShuID0gbigpKSAlPiUgZmlsdGVyKG4gPiAyKSAlPiUgcHVsbChncm91cCkKICAgIGVsbCA8LSBsYXBwbHkoZWxsX2dyb3VwcywgZnVuY3Rpb24obmFtZSkgewogICAgICBkYXRhIDwtIHBjYURhdGEgJT4lIGZpbHRlcihncm91cCA9PSBuYW1lKQogICAgICBjYXI6OmRhdGFFbGxpcHNlKHggPSBkYXRhJFBDMSwgeSA9IGRhdGEkUEMyLAogICAgICAgICAgICAgICAgICAgICAgIGxldmVscyA9IDAuNjgsIHNlZ21lbnRzID0gMTAwLAogICAgICAgICAgICAgICAgICAgICAgIGRyYXcgPSBGKQogICAgfSkKICAgIG5hbWVzKGVsbCkgPC0gZWxsX2dyb3VwcwogICAgZWxsIDwtIGxhcHBseShuYW1lcyhlbGwpLCBmdW5jdGlvbihuYW1lKSB7CiAgICAgIHRpYmJsZShncm91cCA9IG5hbWUsIHggPSBlbGxbW25hbWVdXVsxOjEwMCwgMV0sIHkgPSBlbGxbW25hbWVdXVsxOjEwMCwgMl0sCiAgICAgICAgICAgICB4ZW5kID0gZWxsW1tuYW1lXV1bYygyOjEwMCwgMSksIDFdLCB5ZW5kID0gZWxsW1tuYW1lXV1bYygyOjEwMCwgMSksIDJdKQogICAgICB9KQogICAgZWxsIDwtIFJlZHVjZShyYmluZCwgZWxsKQogICAgCiAgICBnMyA8LSBnZ3Bsb3QocGNhRGF0YSwgYWVzKFBDMSwgUEMyKSkKICAgIGlmIChsZW5ndGgoZWxsKSA+IDApIHsKICAgICAgZzMgPC0gZzMgKwogICAgICAgIGdlb21fc2VnbWVudChkYXRhID0gZWxsLAogICAgICAgICAgICAgICAgICAgICBhZXMoeCA9IHgsIHkgPSB5LCB4ZW5kID0geGVuZCwgeWVuZCA9IHllbmQsCiAgICAgICAgICAgICAgICAgICAgICAgICBncm91cCA9IGdyb3VwLCBjb2wgPSBncm91cCkpCiAgICAgIAogICAgfQogICAgZzMgPC0gZzMgKwogICAgICBzdGF0X2VsbGlwc2UoYWVzKGNvbCA9IGdyb3VwKSwgbGV2ZWwgPSAwLjY4LCB0eXBlID0gIm5vcm0iKSArCiAgICAgIGdlb21fcG9pbnQoYWVzKGNvbCA9IGdyb3VwLCBzaGFwZSA9IHBhdGllbnQpLCBzaXplID0gMykgKwogICAgICAjIGdncmVwZWw6Omdlb21fdGV4dF9yZXBlbChhZXMobGFiZWwgPSBzYW1wbGUpLCBzaXplID0gMikgKwogICAgICB4bGFiKHBhc3RlMCgiUEMxOiAiLCBwY2FfcGVyY192YXJpYW5jZVsxXSwiJSB2YXJpYW5jZSIpKSArCiAgICAgIHlsYWIocGFzdGUwKCJQQzI6ICIsIHBjYV9wZXJjX3ZhcmlhbmNlWzJdLCIlIHZhcmlhbmNlIikpICsKICAgICAgc2NhbGVfY29sb3VyX21hbnVhbCh2YWx1ZXMgPSBwYXBlcl9wYWxldHRlKSArCiAgICAgIHNjYWxlX2ZpbGxfbWFudWFsKHZhbHVlcyA9IHBhcGVyX3BhbGV0dGUpICsKICAgICAgY29vcmRfZml4ZWQocmF0aW8gPSBkaWZmKHJhbmdlX3gpIC8gZGlmZihyYW5nZV95KSkgKwogICAgICB0aGVtZV9idyhiYXNlX2xpbmVfc2l6ZSA9IDApCiAgICAKICAgIHByaW50KGcxKQogICAgcHJpbnQoZzIpCiAgICBwcmludChnMykKICAgIAogICAgcmV0dXJuKGludmlzaWJsZShsaXN0KHBjYURhdGEsIGcxLCBnMiwgZzMpKSkKICAgIAogIH0gZWxzZSB7CiAgICBlbGxfZ3JvdXBzIDwtIHBjYURhdGEgJT4lIGdyb3VwX2J5KGdyb3VwKSAlPiUKICAgICAgZHBseXI6OnN1bW1hcmlzZShuID0gbigpKSAlPiUgZmlsdGVyKG4gPiAyKSAlPiUgcHVsbChncm91cCkKICAgIGVsbCA8LSBsYXBwbHkoZWxsX2dyb3VwcywgZnVuY3Rpb24obmFtZSkgewogICAgICBkYXRhIDwtIHBjYURhdGEgJT4lIGZpbHRlcihncm91cCA9PSBuYW1lKQogICAgICBjYXI6OmRhdGFFbGxpcHNlKHggPSBkYXRhJFBDMSwgeSA9IGRhdGEkUEMyLAogICAgICAgICAgICAgICAgICAgICAgIGxldmVscyA9IDAuNjgsIHNlZ21lbnRzID0gMTAwLAogICAgICAgICAgICAgICAgICAgICAgIGRyYXcgPSBGKQogICAgfSkKICAgIG5hbWVzKGVsbCkgPC0gZWxsX2dyb3VwcwogICAgZWxsIDwtIGxhcHBseShuYW1lcyhlbGwpLCBmdW5jdGlvbihuYW1lKSB7CiAgICAgIHRpYmJsZShncm91cCA9IG5hbWUsIHggPSBlbGxbW25hbWVdXVsxOjEwMCwgMV0sIHkgPSBlbGxbW25hbWVdXVsxOjEwMCwgMl0sCiAgICAgICAgICAgICB4ZW5kID0gZWxsW1tuYW1lXV1bYygyOjEwMCwgMSksIDFdLCB5ZW5kID0gZWxsW1tuYW1lXV1bYygyOjEwMCwgMSksIDJdKQogICAgICB9KQogICAgZWxsIDwtIFJlZHVjZShyYmluZCwgZWxsKQoKICAgIGcyIDwtIGdncGxvdChwY2FEYXRhLCBhZXMoUEMxLCBQQzIpKQogICAgaWYgKGxlbmd0aChlbGwpID4gMCkgewogICAgICBnMiA8LSBnMiArCiAgICAgICAgZ2VvbV9zZWdtZW50KGRhdGEgPSBlbGwsCiAgICAgICAgICAgICAgICAgICAgIGFlcyh4ID0geCwgeSA9IHksIHhlbmQgPSB4ZW5kLCB5ZW5kID0geWVuZCwKICAgICAgICAgICAgICAgICAgICAgICAgIGdyb3VwID0gZ3JvdXAsIGNvbCA9IGdyb3VwKSkKICAgICAgCiAgICB9CiAgICBnMiA8LSBnMiArCiAgICAgIGdlb21fcG9pbnQoYWVzKGZpbGwgPSBncm91cCksIHNoYXBlID0gMjEsIGNvbG9yID0gImJsYWNrIiwgc2l6ZSA9IDMpICsKICAgICAgeGxhYihwYXN0ZTAoIlBDMTogIiwgcGNhX3BlcmNfdmFyaWFuY2VbMV0sIiUgdmFyaWFuY2UiKSkgKwogICAgICB5bGFiKHBhc3RlMCgiUEMyOiAiLCBwY2FfcGVyY192YXJpYW5jZVsyXSwiJSB2YXJpYW5jZSIpKSArCiAgICAgIHNjYWxlX2NvbG91cl9tYW51YWwodmFsdWVzID0gcGFwZXJfcGFsZXR0ZSkgKwogICAgICBzY2FsZV9maWxsX21hbnVhbCh2YWx1ZXMgPSBwYXBlcl9wYWxldHRlKSArCiAgICAgIGNvb3JkX2ZpeGVkKHJhdGlvID0gZGlmZihyYW5nZV94KSAvIGRpZmYocmFuZ2VfeSkpICsKICAgICAgdGhlbWVfYncoYmFzZV9saW5lX3NpemUgPSAwKQogICAgZzEgPC0gZzIgKwogICAgICBnZ3JlcGVsOjpnZW9tX3RleHRfcmVwZWwoYWVzKGxhYmVsID0gc2FtcGxlKSwgc2l6ZSA9IDIpCgogICAgcHJpbnQoZzEpCiAgICBwcmludChnMikKCiAgICByZXR1cm4oaW52aXNpYmxlKGxpc3QocGNhRGF0YSwgZzEsIGcyKSkpCiAgCiAgfQogIAp9CmBgYAoKCldlIHRyYW5zZm9ybSB0aGUgZGF0YSBhbGwgdG9nZXRoZXIgd2l0aCB0aGUgVlNUIHRyYW5zZm9ybWF0aW9uIGZ1bmN0aW9uLiBUaGlzIGVzc2VudGlhbGx5IGxvZy10cmFuc2Zvcm1zIHRoZSBjb3VudHMgd2hpbGUgdGFraW5nIGludG8gYWNjb3VudCB0aGUgbGlicmFyeSBzaXplIChzZWUgREVTZXEyIG1hbnVhbCBmb3IgbW9yZSBpbmZvKS4KCmBgYHtyIHZzdF90cmFuc2Zvcm19CmJ1bGs0X3ZzdCA8LSB2c3QoYnVsazRfZGRzKQpgYGAKCgojIyBUcmVhdGVkIHZzIHVudHJlYXRlZCBzYW1wbGVzCgojIyMgQWxsIHNhbXBsZXMKClRoaXMgaXMgdGhlIGluaXRpYWwgUENBLCBidWlsdCBmcm9tIHRoZSBgYnVsazRfZGRzYCBkYXRhIHNldCwgdXNpbmcgVlNULXRyYW5zZm9ybWVkIGNvdW50cy4KCmBgYHtyIHRyZWF0ZWRfdnNfdW50cmVhdGVkfQp0aGlzX2J1bGtfdnN0IDwtIGJ1bGs0X3ZzdFssIGNvbERhdGEoYnVsazRfZGRzKSRwYXRpZW50ICVpbiUgYygiUFQxIiwgIlBUMTIiLCAiUFQxMyIpXQp0aGlzX2J1bGtfdnN0JHBhdGllbnQgPC0gZmFjdG9yKGMoIlB0MSIsICJQdDIiLCAiUHQxMiIsICJQdDEzIilbYXMubnVtZXJpYyh0aGlzX2J1bGtfdnN0JHBhdGllbnQpXSkKcGxvdHMgPC0gcGxvdF9QQ0FzX2Zyb21fdnN0KHRoaXNfYnVsa192c3QpCmBgYAoKIyMjIyBFeHRlbmRlZCBGaWd1cmUgNWEKCjxkaXYgY2xhc3M9ImFsZXJ0IGFsZXJ0LWluZm8iPlRoZSBuZXh0IGNodW5rIG9mIGNvZGUgc2F2ZSB0aGUgRXh0RmlnNWEgZmlndXJlIGFuZCBhc3NvY2lhdGVkIGRhdGEgaW50byB0aGUgYG91dHB1dGAgZm9sZGVyPC9kaXY+CgpgYGB7ciBzYXZlX2V4dGZpZ181YX0KcGxvdHNbWzRdXSArCiAgY29vcmRfY2FydGVzaWFuKCkgKwogIGd1aWRlcyhjb2xvciA9ICJub25lIikgKwogIGd1aWRlcyhzaGFwZSA9IGd1aWRlX2xlZ2VuZCh0aXRsZSA9ICJQYXRpZW50IikpICsKICB0aGVtZShsZWdlbmQucG9zaXRpb24gPSAidG9wIikKZ2dzYXZlKCJvdXRwdXQvZmlndXJlcy9FeHRGaWc1YV9wY2FfM3BhdGllbnRzLnBkZiIsCiAgICAgICBkZXZpY2UgPSAicGRmIiwgd2lkdGggPSA1LCBoZWlnaHQgPSA0LCBzY2FsZSA9IDAuOCkKCmV4Y2VsX2RhdGEgPC0gcGxvdHNbWzFdXQoKd2IgPC0gb3Blbnhsc3g6OmNyZWF0ZVdvcmtib29rKCkKd3MgPC0gb3Blbnhsc3g6OmFkZFdvcmtzaGVldCh3YiwgIkV4dEZpZzVhIFBDQSBidWxrIFJOQXNlcSIpCgpvcGVueGxzeDo6d3JpdGVEYXRhVGFibGUod2IsIHNoZWV0ID0gd3MsIHggPSBleGNlbF9kYXRhLAogICAgICAgICAgICAgICByb3dOYW1lcyA9IEYsIHRhYmxlU3R5bGUgPSAibm9uZSIsIHdpdGhGaWx0ZXIgPSBGKQpvcGVueGxzeDo6c2V0Q29sV2lkdGhzKHdiLCB3cywgY29scyA9IDE6bmNvbChleGNlbF9kYXRhKSwgd2lkdGhzID0gImF1dG8iKQpvcGVueGxzeDo6YWRkU3R5bGUod2IsIHdzLCByb3dzID0gMSwgY29scyA9IDE6bmNvbChleGNlbF9kYXRhKSwKICAgICAgICAgICAgICAgICAgIHN0eWxlID0gb3Blbnhsc3g6OmNyZWF0ZVN0eWxlKHRleHREZWNvcmF0aW9uID0gImJvbGQiKSkKb3Blbnhsc3g6OmFkZFN0eWxlKHdiLCB3cywgcm93cyA9IDE6bnJvdyhleGNlbF9kYXRhKSArIDEsIGNvbHMgPSAxLAogICAgICAgICAgICAgICAgICAgc3R5bGUgPSBvcGVueGxzeDo6Y3JlYXRlU3R5bGUodGV4dERlY29yYXRpb24gPSAiYm9sZCIpKQoKb3Blbnhsc3g6OnNhdmVXb3JrYm9vayh3YiwgIm91dHB1dC90YWJsZXMvRXh0RmlnNWFfYnVsa1JOQXNlcV9kYXRhLnhsc3giLCBvdmVyd3JpdGUgPSBUUlVFKQpgYGAKCiMjIyBQVDEgb25seQoKU2FtZSBhcyBhYm92ZSwgYnV0IHVzaW5nIHNhbXBsZXMgZnJvbSBQVDEgb25seS4KCmBgYHtyIHRyZWF0ZWRfdnNfdW50cmVhdGVkLnB0MX0KdGhpc19idWxrX3ZzdCA8LSBidWxrNF92c3RbLCBjb2xEYXRhKGJ1bGs0X2RkcykkcGF0aWVudCAlaW4lIGMoIlBUMSIpXQpwbG90X1BDQXNfZnJvbV92c3QodGhpc19idWxrX3ZzdCkKYGBgCgoKIyMjIFBUMTIgb25seQoKU2FtZSBhcyBhYm92ZSwgYnV0IHVzaW5nIHNhbXBsZXMgZnJvbSBQVDEyIG9ubHkuCgpgYGB7ciB0cmVhdGVkX3ZzX3VudHJlYXRlZC5wdDEyfQp0aGlzX2J1bGtfdnN0IDwtIGJ1bGs0X3ZzdFssIGNvbERhdGEoYnVsazRfZGRzKSRwYXRpZW50ICVpbiUgYygiUFQxMiIpXQpwbG90X1BDQXNfZnJvbV92c3QodGhpc19idWxrX3ZzdCkKYGBgCgojIyMgUFQxMyBvbmx5CgpTYW1lIGFzIGFib3ZlLCBidXQgdXNpbmcgc2FtcGxlcyBmcm9tIFBUMTMgb25seS4KCmBgYHtyIHRyZWF0ZWRfdnNfdW50cmVhdGVkLnB0MTN9CnRoaXNfYnVsa192c3QgPC0gYnVsazRfdnN0WywgY29sRGF0YShidWxrNF9kZHMpJHBhdGllbnQgJWluJSBjKCJQVDEzIildCnBsb3RfUENBc19mcm9tX3ZzdCh0aGlzX2J1bGtfdnN0KQpgYGAKCiMjIFRyZWF0bWVudCByZXNwb25zZSBleHBlcmltZW50CgpUaGlzIGlzIHRoZSBpbml0aWFsIFBDQSwgYnVpbHQgZnJvbSB0aGUgYGJ1bGs0X2Rkc2AgZGF0YSBzZXQsIHVzaW5nIFZTVC10cmFuc2Zvcm1lZCBjb3VudHMuIFRoZSBkYXRhIGNvcnJlc3BvbmQgdG8gUFQyLCB3aGVyZSB3ZSBoYXZlIGZpdmUgdHlwZXMgb2Ygc2FtcGxlczoKCiogdW50cmVhdGVkCiogdHJlYXRtZW50IHdpdGhkcmF3bgoqIGNocm9uaWNhbGx5IHRyZWF0ZWQKKiBhY3V0ZWx5IHRyZWF0ZWQKKiByZWxhcHNlIChsZXQgdG8gcmVsYXBzZSkKCmBgYHtyIHRyZWF0bWVudF9yZXNwb25zZX0KdGhpc19idWxrX3ZzdCA8LSBidWxrNF92c3RbLCBjb2xEYXRhKGJ1bGs0X2RkcykkcGF0aWVudCAlaW4lIGMoIlBUMiIpXQpoYWNrX2J1bGtfdnN0IDwtIHRoaXNfYnVsa192c3QKaGFja19idWxrX3ZzdCRwYXRpZW50IDwtIGhhY2tfYnVsa192c3QkdGlzc3VlCnBsb3RzIDwtIHBsb3RfUENBc19mcm9tX3ZzdChoYWNrX2J1bGtfdnN0KQpgYGAKCiMjIyMgRXh0ZW5kZWQgRmlndXJlIDViCgo8ZGl2IGNsYXNzPSJhbGVydCBhbGVydC1pbmZvIj5UaGUgbmV4dCBjaHVuayBvZiBjb2RlIHNhdmUgdGhlIEV4dEZpZzViIGZpZ3VyZSBhbmQgYXNzb2NpYXRlZCBkYXRhIGludG8gdGhlIGBvdXRwdXRgIGZvbGRlcjwvZGl2PgoKYGBge3Igc2F2ZV9leHRmaWdfNWJ9CnBsb3RzW1s0XV0gKwogIGNvb3JkX2NhcnRlc2lhbigpICsKICBndWlkZXMoY29sb3IgPSAibm9uZSIpICsKICBndWlkZXMoZmlsbCA9ICJub25lIikgKwogIGd1aWRlcyhzaGFwZSA9IGd1aWRlX2xlZ2VuZCh0aXRsZSA9ICJUaXNzdWUiKSkgKwogIHRoZW1lKGxlZ2VuZC5wb3NpdGlvbiA9ICJ0b3AiKQpnZ3NhdmUoIm91dHB1dC9maWd1cmVzL0V4dEZpZzViX3BjYV90cmVhdG1lbnRfcmVzcG9uc2UucGRmIiwKICAgICAgIGRldmljZSA9ICJwZGYiLCB3aWR0aCA9IDYsIGhlaWdodCA9IDQsIHNjYWxlID0gMC44KQoKZXhjZWxfZGF0YSA8LSBwbG90c1tbMV1dCgp3YiA8LSBvcGVueGxzeDo6Y3JlYXRlV29ya2Jvb2soKQp3cyA8LSBvcGVueGxzeDo6YWRkV29ya3NoZWV0KHdiLCAiRXh0RmlnNWIgUENBIGJ1bGsgUk5Bc2VxIikKCm9wZW54bHN4Ojp3cml0ZURhdGFUYWJsZSh3Yiwgc2hlZXQgPSB3cywgeCA9IGV4Y2VsX2RhdGEsCiAgICAgICAgICAgICAgIHJvd05hbWVzID0gRiwgdGFibGVTdHlsZSA9ICJub25lIiwgd2l0aEZpbHRlciA9IEYpCm9wZW54bHN4OjpzZXRDb2xXaWR0aHMod2IsIHdzLCBjb2xzID0gMTpuY29sKGV4Y2VsX2RhdGEpLCB3aWR0aHMgPSAiYXV0byIpCm9wZW54bHN4OjphZGRTdHlsZSh3Yiwgd3MsIHJvd3MgPSAxLCBjb2xzID0gMTpuY29sKGV4Y2VsX2RhdGEpLAogICAgICAgICAgICAgICAgICAgc3R5bGUgPSBvcGVueGxzeDo6Y3JlYXRlU3R5bGUodGV4dERlY29yYXRpb24gPSAiYm9sZCIpKQpvcGVueGxzeDo6YWRkU3R5bGUod2IsIHdzLCByb3dzID0gMTpucm93KGV4Y2VsX2RhdGEpICsgMSwgY29scyA9IDEsCiAgICAgICAgICAgICAgICAgICBzdHlsZSA9IG9wZW54bHN4OjpjcmVhdGVTdHlsZSh0ZXh0RGVjb3JhdGlvbiA9ICJib2xkIikpCgpvcGVueGxzeDo6c2F2ZVdvcmtib29rKHdiLCAib3V0cHV0L3RhYmxlcy9FeHRGaWc1Yl9idWxrUk5Bc2VxX2RhdGEueGxzeCIsIG92ZXJ3cml0ZSA9IFRSVUUpCmBgYAoK</div>
+
+<!-- Adjust MathJax settings so that all math formulae are shown using
+TeX fonts only; see
+http://docs.mathjax.org/en/latest/configuration.html.  This will make
+the presentation more consistent at the cost of the webpage sometimes
+taking slightly longer to load. Note that this only works because the
+footer is added to webpages before the MathJax javascript. -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+
+<!-- code folding -->
+<script>
+$(document).ready(function () {
+  window.initializeSourceEmbed("bulkRNA-pca.Rmd");
+  window.initializeCodeFolding("hide" === "show");
+});
+</script>
+
+<script>
+$(document).ready(function ()  {
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_').toLowerCase();
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

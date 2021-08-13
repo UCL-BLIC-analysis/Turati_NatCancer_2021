@@ -8,3 +8,12 @@ editor_options:
 ---
 
 <div class="alert alert-warning">Under construction</div>
+
+#### 1. [PCA](bulkRNA-pca.html)
+
+This analysis is used in Figure S5A and S5B of the mss.
+
+DESeq2 uses the top 500 most variable genes by default to draw the PCA. In this case, we are using the top 1000 genes (for historical reasons).
+
+
+

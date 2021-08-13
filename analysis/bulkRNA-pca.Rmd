@@ -20,15 +20,14 @@ num_of_genes.pca <- 1000
 
 In this document, we are looking at the main components separating the samples, using PCA as an analyisis tool. We will use the top `r num_of_genes.pca` most variable genes.
 
-Please refer to the [Bulk Data](00-data-bulk.html) section for more info.
+Please refer to the [Data - Bulk RNAseq](data-bulkRNAseq.html) page for more info.
 
 ```{r read_data}
 data("bulk4_dds")
 data("paper_palette")
 ```
 
-```{r}
-
+```{r function_plot_PCAs_from_vst}
 plot_PCAs_from_vst <- function(vst, num.genes = 1000) {
   gene_variance <- rowVars(assay(vst))
 
@@ -172,30 +171,36 @@ plot_PCAs_from_vst <- function(vst, num.genes = 1000) {
 ```
 
 
-## PCA for all 
+We transform the data all together with the VST transformation function. This essentially log-transforms the counts while taking into account the library size (see DESeq2 manual for more info).
 
-We transform the data all together with the VST transformation function. This essentially log-transcforms the counts while taking into account the library size.
-
-```{r}
+```{r vst_transform}
 bulk4_vst <- vst(bulk4_dds)
 ```
 
 
-### Treated vs untreated samples (all patients together)
+## Treated vs untreated samples
 
-This is the initial PCA is built with the `bulk4_dds` data set, using VST-transformed counts.
+### All samples
 
-```{r}
+This is the initial PCA, built from the `bulk4_dds` data set, using VST-transformed counts.
+
+```{r treated_vs_untreated}
 this_bulk_vst <- bulk4_vst[, colData(bulk4_dds)$patient %in% c("PT1", "PT12", "PT13")]
 this_bulk_vst$patient <- factor(c("Pt1", "Pt2", "Pt12", "Pt13")[as.numeric(this_bulk_vst$patient)])
 plots <- plot_PCAs_from_vst(this_bulk_vst)
+```
 
+#### Extended Figure 5a
+
+<div class="alert alert-info">The next chunk of code save the ExtFig5a figure and associated data into the `output` folder</div>
+
+```{r save_extfig_5a}
 plots[[4]] +
   coord_cartesian() +
   guides(color = "none") +
   guides(shape = guide_legend(title = "Patient")) +
   theme(legend.position = "top")
-ggsave("output/figures/FigS5a_pca_3patients.pdf",
+ggsave("output/figures/ExtFig5a_pca_3patients.pdf",
        device = "pdf", width = 5, height = 4, scale = 0.8)
 
 excel_data <- plots[[1]]
@@ -211,54 +216,66 @@ openxlsx::addStyle(wb, ws, rows = 1, cols = 1:ncol(excel_data),
 openxlsx::addStyle(wb, ws, rows = 1:nrow(excel_data) + 1, cols = 1,
                    style = openxlsx::createStyle(textDecoration = "bold"))
 
-openxlsx::saveWorkbook(wb, "output/bulkRNAseq_data_FigS5a.xlsx", overwrite = TRUE)
+openxlsx::saveWorkbook(wb, "output/tables/ExtFig5a_bulkRNAseq_data.xlsx", overwrite = TRUE)
 ```
 
-### Treated vs untreated samples (PT1 only)
+### PT1 only
 
-This is the initial PCA is built with the `bulk4_dds` data set, using VST-transformed counts.
+Same as above, but using samples from PT1 only.
 
-```{r}
+```{r treated_vs_untreated.pt1}
 this_bulk_vst <- bulk4_vst[, colData(bulk4_dds)$patient %in% c("PT1")]
 plot_PCAs_from_vst(this_bulk_vst)
 ```
 
 
-### Treated vs untreated samples (PT12 only)
+### PT12 only
 
-This is the initial PCA is built with the `bulk4_dds` data set, using VST-transformed counts.
+Same as above, but using samples from PT12 only.
 
-```{r}
+```{r treated_vs_untreated.pt12}
 this_bulk_vst <- bulk4_vst[, colData(bulk4_dds)$patient %in% c("PT12")]
 plot_PCAs_from_vst(this_bulk_vst)
 ```
 
-### Treated vs untreated samples (PT13 only)
+### PT13 only
 
-This is the initial PCA is built with the `bulk4_dds` data set, using VST-transformed counts.
+Same as above, but using samples from PT13 only.
 
-```{r}
+```{r treated_vs_untreated.pt13}
 this_bulk_vst <- bulk4_vst[, colData(bulk4_dds)$patient %in% c("PT13")]
 plot_PCAs_from_vst(this_bulk_vst)
 ```
 
-### Treatment response experiment
+## Treatment response experiment
 
-This is the initial PCA is built with the `bulk4_dds` data set, using VST-transformed counts.
+This is the initial PCA, built from the `bulk4_dds` data set, using VST-transformed counts. The data correspond to PT2, where we have five types of samples:
 
-```{r}
+* untreated
+* treatment withdrawn
+* chronically treated
+* acutely treated
+* relapse (let to relapse)
+
+```{r treatment_response}
 this_bulk_vst <- bulk4_vst[, colData(bulk4_dds)$patient %in% c("PT2")]
 hack_bulk_vst <- this_bulk_vst
 hack_bulk_vst$patient <- hack_bulk_vst$tissue
 plots <- plot_PCAs_from_vst(hack_bulk_vst)
+```
 
-plots[[3]] +
+#### Extended Figure 5b
+
+<div class="alert alert-info">The next chunk of code save the ExtFig5b figure and associated data into the `output` folder</div>
+
+```{r save_extfig_5b}
+plots[[4]] +
   coord_cartesian() +
   guides(color = "none") +
   guides(fill = "none") +
   guides(shape = guide_legend(title = "Tissue")) +
   theme(legend.position = "top")
-ggsave("output/figures/FigS5b_pca_headache.pdf",
+ggsave("output/figures/ExtFig5b_pca_treatment_response.pdf",
        device = "pdf", width = 6, height = 4, scale = 0.8)
 
 excel_data <- plots[[1]]
@@ -274,7 +291,6 @@ openxlsx::addStyle(wb, ws, rows = 1, cols = 1:ncol(excel_data),
 openxlsx::addStyle(wb, ws, rows = 1:nrow(excel_data) + 1, cols = 1,
                    style = openxlsx::createStyle(textDecoration = "bold"))
 
-openxlsx::saveWorkbook(wb, "output/bulkRNAseq_data_FigS5b.xlsx", overwrite = TRUE)
-
+openxlsx::saveWorkbook(wb, "output/tables/ExtFig5b_bulkRNAseq_data.xlsx", overwrite = TRUE)
 ```
 
