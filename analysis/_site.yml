@@ -2,6 +2,9 @@ name: "Turati_NatCancer_2021"
 output_dir: ../docs
 navbar:
   title: "Turati_NatCancer_2021"
+  right:
+  - icon: fa-github
+    href: https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021
   left:
   - text: Home
     href: index.html
