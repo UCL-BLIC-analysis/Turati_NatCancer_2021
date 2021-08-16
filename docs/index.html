@@ -22,6 +22,8 @@
 <script src="site_libs/navigation-1.1/tabsets.js"></script>
 <script src="site_libs/navigation-1.1/codefolding.js"></script>
 <script src="site_libs/navigation-1.1/sourceembed.js"></script>
+<link href="site_libs/font-awesome-5.1.0/css/all.css" rel="stylesheet" />
+<link href="site_libs/font-awesome-5.1.0/css/v4-shims.css" rel="stylesheet" />
 
 <link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/master/img/reproducible.png">
 <!-- Add a small amount of space between sections. -->
@@ -293,7 +295,12 @@ $(document).ready(function () {
 </li>
       </ul>
       <ul class="nav navbar-nav navbar-right">
-        
+        <li>
+  <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021">
+    <span class="fa fa-github"></span>
+     
+  </a>
+</li>
       </ul>
     </div><!--/.nav-collapse -->
   </div><!--/.container -->
@@ -338,7 +345,7 @@ $(document).ready(function () {
 <div class="tab-content">
 <div id="summary" class="tab-pane fade in active">
 <p>
-<strong>Last updated:</strong> 2021-08-13
+<strong>Last updated:</strong> 2021-08-16
 </p>
 <p>
 <strong>Checks:</strong> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 2 <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> 0
@@ -369,16 +376,16 @@ This reproducible <a href="http://rmarkdown.rstudio.com">R Markdown</a> analysis
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021treea7a695e53f606dd94d1cb5ef71d3e9b8a3ad65dctargetblanka7a695ea"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/a7a695e53f606dd94d1cb5ef71d3e9b8a3ad65dc" target="_blank">a7a695e</a> </a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree9254340fc7a442989876f2f9cd48f73253274915targetblank9254340a"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/9254340fc7a442989876f2f9cd48f73253274915" target="_blank">9254340</a> </a>
 </p>
 </div>
-<div id="strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021treea7a695e53f606dd94d1cb5ef71d3e9b8a3ad65dctargetblanka7a695ea" class="panel-collapse collapse">
+<div id="strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree9254340fc7a442989876f2f9cd48f73253274915targetblank9254340a" class="panel-collapse collapse">
 <div class="panel-body">
 <p>
 Great! You are using Git for version control. Tracking code development and connecting the code version to the results is critical for reproducibility.
 </p>
 <p>
-The results in this page were generated with repository version <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/a7a695e53f606dd94d1cb5ef71d3e9b8a3ad65dc" target="_blank">a7a695e</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
+The results in this page were generated with repository version <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/9254340fc7a442989876f2f9cd48f73253274915" target="_blank">9254340</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
 </p>
 <p>
 Note that you need to be careful to ensure that all relevant files for the analysis have been committed to Git prior to generating the results (you can use <code>wflow_publish</code> or <code>wflow_git_commit</code>). workflowr only checks the R Markdown file, but you know if there are other scripts or data files that it depends on. Below is the status of the Git repository when the results were generated:
@@ -387,6 +394,7 @@ Note that you need to be careful to ensure that all relevant files for the analy
 Ignored files:
     Ignored:    .Rhistory
     Ignored:    .Rproj.user/
+    Ignored:    bulkRNA/
     Ignored:    data/bulk4_counts.rda
     Ignored:    data/bulk4_dds.rda
     Ignored:    data/paper_palette.rda
@@ -400,8 +408,11 @@ Ignored files:
     Ignored:    output/deseq2-mini_bulk4_dds.pt2-Chronically treated-vs-Never treated.rds
     Ignored:    output/deseq2-mini_bulk4_dds.pt2-Relapse-vs-Never treated.rds
     Ignored:    output/deseq2-mini_bulk4_dds.pt2-Treatment withdrawn-vs-Never treated.rds
+    Ignored:    output/fgsea_results.RDS
     Ignored:    output/figures/ExtFig5a_pca_3patients.pdf
     Ignored:    output/figures/ExtFig5b_pca_treatment_response.pdf
+    Ignored:    output/figures/Fig5C_fgsea_selected_signatures.pdf
+    Ignored:    output/figures/ItemS2.pdf
     Ignored:    output/tables/ExtFig5a_bulkRNAseq_data.xlsx
     Ignored:    output/tables/ExtFig5b_bulkRNAseq_data.xlsx
 
@@ -442,6 +453,23 @@ Message
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/UCL-BLIC-analysis/Turati_NatCancer_2021/b6f5b35c8c779057361adfe88993cc57d00e1982/docs/index.html" target="_blank">b6f5b35</a>
+</td>
+<td>
+Javier Herrero
+</td>
+<td>
+2021-08-13
+</td>
+<td>
+Build site.
+</td>
+</tr>
 <tr>
 <td>
 html
