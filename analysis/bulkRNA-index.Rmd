@@ -7,8 +7,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-<div class="alert alert-warning">Under construction</div>
-
 #### 1. [PCA](bulkRNA-pca.html)
 
 This analysis is used in Figure S5A and S5B of the mss.
