@@ -20,3 +20,8 @@ DESeq2 uses the top 500 most variable genes by default to draw the PCA. In this 
 
 This runs DESeq2 and stores the results in the output folder.
 
+
+#### 3. [Bulk RNA-seq Gene Set Enrichment Analysis](bulkRNA-gs_enrichment.html)
+
+This runs DESeq2 and stores the results in the output folder.
+
