@@ -1,0 +1,280 @@
+---
+title: "Bulk RNA-seq Gene Set Enrichment"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+---
+
+## Introduction
+
+This document presents the Gene Set Analysis for the bulk RNA-seq data in this project.
+
+The analyisis is performed using fGSEA (Sergushichev A (2016). “An algorithm for fast preranked gene set enrichment analysis using cumulative statistic calculation.” bioRxiv. doi: 10.1101/060012, http://biorxiv.org/content/early/2016/06/20/060012).
+
+We sort the genes by their Wald statistic, as provided by DESeq2.
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(DESeq2)
+library(fgsea)
+library(DT)
+
+datatable(NULL)
+```
+
+```{r get_signatures, cache=FALSE}
+data("signatures")
+pathways <- c(signatures[["H"]],
+              signatures[["lineages"]][c("ProB", "MLP", "MEP", "HSC",
+                                         "GMP", "ETP", "EarlyB", "CMP")])
+names(pathways) <- gsub("HALLMARK_", "", names(pathways))
+```
+
+
+```{r run_fgsea_function, results = "asis", fig.height = 10, warnings = FALSE}
+run_fgsea <- function(my_res, pathways) {
+  my_res <- my_res[complete.cases(my_res),]
+  # Sort by the statistic (Wald statistic is the default in DESeq2)
+  my_res <- my_res %>% arrange(stat)
+  stat <- my_res$stat
+  names(stat) <- my_res$symbol
+  
+  # Rn fGSEA
+  fgseaRes <- fgsea(pathways, stat, nperm=10000)
+  
+  # Change the e! stable IDs into gene symbols in the leading edge list (col #8)
+  print(htmltools::tagList(
+    datatable(fgseaRes,
+              options = list(dom = 'frtip')
+              ) %>%
+      formatSignif(columns=c('pval', 'padj', 'ES', 'NES'), digits=3) %>%
+      formatStyle(
+        'padj',
+        target = "row",
+        fontWeight = styleInterval(0.05, c('bold', 'normal'))),
+    htmltools::tags$br()
+  ))
+
+  fgseaRes_sig <- fgseaRes[fgseaRes$padj < 0.05,]
+  fgseaRes_sig <- fgseaRes_sig[order(fgseaRes_sig$NES),]
+  cat("\n\n")
+  grid::grid.newpage()
+  plotGseaTable(pathways[fgseaRes_sig$pathway], stat, fgseaRes_sig, gseaParam = 0.4)
+  cat("\n\n")
+
+  g <- ggplot(fgseaRes, aes(reorder(pathway, NES), NES)) +
+    geom_col(aes(fill=padj<0.05), col = "black") +
+    coord_flip() +
+    labs(x="Pathway", y="Normalized Enrichment Score",
+         title="Hallmarks and signatures") +
+    scale_fill_manual(limits = c(T, F), values = c("#999999", "#EEEEEE")) +
+    theme_minimal()
+  print(g)
+  cat("\n\n")
+  return(invisible(fgseaRes))
+}
+```
+
+## Results
+
+```{r}
+fgsea_results <- list()
+```
+
+### Treated vs Untreated (PT1 + PT12 + PT13)
+
+```{r fgsea.treated_vs_untreated.3pts, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.3pts-Treated-vs-Untreated.rds")
+tag <- "treated_vs_untreated.3pts"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+### Treated vs Untreated (PT1)
+
+```{r fgsea.treated_vs_untreated.pt1, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.pt1-Treated-vs-Untreated.rds")
+tag <- "treated_vs_untreated.pt1"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+### Treated vs Untreated (PT12)
+
+```{r fgsea.treated_vs_untreated.pt12, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.pt12-Treated-vs-Untreated.rds")
+tag <- "treated_vs_untreated.pt12"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+### Treated vs Untreated (PT13)
+
+```{r fgsea.treated_vs_untreated.pt13, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.pt13-Treated-vs-Untreated.rds")
+tag <- "treated_vs_untreated.pt13"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+### Acutely treated vs Never treated (PT2)
+
+```{r fgsea.treatment_response.acutely_treated_vs_untreated, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.pt2-Acutely treated-vs-Never treated.rds")
+tag <- "acute_vs_never"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+### Chronically treated vs Never treated (PT2)
+
+```{r fgsea.treatment_response.chronically_treated_vs_untreated, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.pt2-Chronically treated-vs-Never treated.rds")
+tag <- "chronic_vs_never"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+### Relapse vs Never treated (PT2)
+
+```{r fgsea.treatment_response.relapse_vs_untreated, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.pt2-Relapse-vs-Never treated.rds")
+tag <- "relapse_vs_never"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+### Treatment withdrawn vs Never treated (PT2)
+
+```{r fgsea.treatment_response.treatment_withdrawn_vs_untreated, results = "asis", fig.height = 10, warnings = FALSE}
+bulk_res <- readRDS("output/deseq2-mini_bulk4_dds.pt2-Treatment withdrawn-vs-Never treated.rds")
+tag <- "withdrawn_vs_never"
+
+fgsea_results[[tag]] <- run_fgsea(bulk_res, pathways)
+```
+
+
+## Summary
+
+```{r save_results}
+saveRDS(fgsea_results, "output/fgsea_results.rds")
+
+fgsea_tibble <- lapply(names(fgsea_results), function(x) {tibble(set = x, fgsea_results[[x]])}) %>%
+  transpose() %>% as_tibble() %>% unnest(cols = c(set, `fgsea_results[[x]]`))
+```
+
+
+```{r barplots.common_mappings}
+barplot_common_mappings <- list(
+  geom_col(aes(fill = paste(padj < 0.05, NES < 0)), col = "black"),
+  coord_flip(),
+  facet_grid(rows = ~ set),
+  labs(x="Gene set", y="Normalized Enrichment Score",
+       title="Hallmarks and signatures"),
+  scale_fill_manual(name = "NES",
+                    limits = c("TRUE FALSE", "FALSE FALSE", "FALSE TRUE", "TRUE TRUE"),
+                    labels = c("signif, pos", "non-signif, pos", "non-signif, neg", "signif, neg"),
+                    values = c(scales::muted("red"),
+                               scales::alpha(scales::muted("red"), 0.2),
+                               scales::alpha(scales::muted("blue"), 0.2),
+                               scales::muted("blue"))),
+  geom_hline(yintercept = 0),
+  scale_y_continuous(trans = scales::pseudo_log_trans()),
+  theme_minimal()
+)
+```
+
+### Main signatures
+
+```{r barplots.main_signatures, fig.height = 12, fig.width = 15}
+fgsea_tibble$set <- factor(fgsea_tibble$set,
+                           levels = c("treated_vs_untreated.3pts",
+                                      "treated_vs_untreated.pt1",
+                                      "treated_vs_untreated.pt12",
+                                      "treated_vs_untreated.pt13",
+                                      "acute_vs_never",
+                                      "chronic_vs_never",
+                                      "acute_vs_chronic",
+                                      "relapse_vs_never",
+                                      "withdrawn_vs_never"))
+fgsea_tibble$set_name <- fgsea_tibble$set
+levels(fgsea_tibble$set_name)[1] <- "PT1 + PT12 + PT13\ntreated vs untreated"
+levels(fgsea_tibble$set_name)[2] <- "PT1\ntreated vs untreated"
+levels(fgsea_tibble$set_name)[3] <- "PT12\ntreated vs untreated"
+levels(fgsea_tibble$set_name)[4] <- "PT13\ntreated vs untreated"
+levels(fgsea_tibble$set_name)[5] <- "PT2\nacute vs untreated"
+levels(fgsea_tibble$set_name)[6] <- "PT2\nchronic vs untreated"
+levels(fgsea_tibble$set_name)[7] <- "PT2\nacute vs chronic"
+levels(fgsea_tibble$set_name)[8] <- "PT2\nrelapse vs untreated"
+levels(fgsea_tibble$set_name)[9] <- "PT2\nwithdrawn vs untreated"
+
+g <- ggplot(fgsea_tibble %>%
+              filter(set %in% c("treated_vs_untreated.3pts",
+                                "acute_vs_never",
+                                "chronic_vs_never",
+                                "relapse_vs_never",
+                                "withdrawn_vs_never")) %>%
+              mutate(set = set_name) %>%
+              group_by(pathway) %>%
+              mutate(mean.NES = mean(NES)) %>%
+              mutate(min.padj = min(padj)) %>%
+              filter(min.padj < 0.05),
+            aes(reorder(pathway, mean.NES), NES)) +
+  barplot_common_mappings
+print(g)
+```
+
+### Selected signatures
+
+<div class="alert alert-info">The next chunk of code saves the Fig5c figure into the `output` folder</div>
+
+```{r barplots.selected_signatures, fig.height = 5, fig.width = 12}
+g <- ggplot(fgsea_tibble %>%
+              filter(set %in% c("treated_vs_untreated.3pts",
+                                "acute_vs_never",
+                                "chronic_vs_never",
+                                "relapse_vs_never",
+                                "withdrawn_vs_never")) %>%
+              filter(pathway %in% c("G2M_CHECKPOINT",
+                                    "E2F_TARGETS",
+                                    "MYC_TARGETS_V1",
+                                    # "MYC_TARGETS_V2",
+                                    "OXIDATIVE_PHOSPHORYLATION",
+                                    "MITOTIC_SPINDLE",
+                                    "DNA_REPAIR",
+                                    "COMPLEMENT",
+                                    "HSC",
+                                    "MLP",
+                                    "ProB")) %>%
+              mutate(set = set_name) %>%
+              mutate(pathway = ifelse(pathway == "OXIDATIVE_PHOSPHORYLATION", "OXIDATIVE_   \nPHOSPHORYLATION", pathway)) %>%
+              group_by(pathway) %>%
+              mutate(mean.NES = mean(NES)) %>%
+              mutate(min.padj = min(padj)),
+            aes(reorder(pathway, mean.NES), NES)) +
+  barplot_common_mappings +
+  labs(title = NULL) +
+  theme(text = element_text(size = 14))
+print(g +
+        scale_x_discrete(limits = c(
+          "ProB",
+          "MLP",
+          "HSC",
+          "",
+          "COMPLEMENT",
+          "MITOTIC_SPINDLE",
+          "OXIDATIVE_   \nPHOSPHORYLATION",
+          "DNA_REPAIR",
+          # "MYC_TARGETS_V2",
+          "G2M_CHECKPOINT",
+          "MYC_TARGETS_V1",
+          "E2F_TARGETS"
+          )) +
+        geom_tile(aes(x = 4, y = 0, width = 0.8, height = Inf), fill = "white", col = NA)
+        # geom_vline(xintercept = c(3, 8), col = "white", size = 10)
+)
+
+ggsave("output/figures/Fig5C_fgsea_selected_signatures.pdf", device = "pdf",
+       height = 5, width = 12)
+```
+
