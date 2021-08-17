@@ -327,7 +327,7 @@ $(document).ready(function () {
 
 <p>
 <button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
-<span class="glyphicon glyphicon-list" aria-hidden="true"></span> workflowr <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span> workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span>
 </button>
 </p>
 <div id="workflowr-report" class="collapse">
@@ -336,7 +336,7 @@ $(document).ready(function () {
 <a data-toggle="tab" href="#summary">Summary</a>
 </li>
 <li>
-<a data-toggle="tab" href="#checks"> Checks <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> </a>
+<a data-toggle="tab" href="#checks"> Checks <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> </a>
 </li>
 <li>
 <a data-toggle="tab" href="#versions">Past versions</a>
@@ -348,7 +348,7 @@ $(document).ready(function () {
 <strong>Last updated:</strong> 2021-08-16
 </p>
 <p>
-<strong>Checks:</strong> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 2 <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> 0
+<strong>Checks:</strong> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 1 <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> 1
 </p>
 <p>
 <strong>Knit directory:</strong> <code>Turati_NatCancer_2021/</code> <span class="glyphicon glyphicon-question-sign" aria-hidden="true" title="This is the local directory in which the code in this file was executed."> </span>
@@ -364,28 +364,28 @@ This reproducible <a href="http://rmarkdown.rstudio.com">R Markdown</a> analysis
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date </a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges"> <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted changes </a>
 </p>
 </div>
-<div id="strongRMarkdownfilestronguptodate" class="panel-collapse collapse">
+<div id="strongRMarkdownfilestronguncommittedchanges" class="panel-collapse collapse">
 <div class="panel-body">
-<p>Great! Since the R Markdown file has been committed to the Git repository, you know the exact version of the code that produced these results.</p>
+<p>The R Markdown file has unstaged changes. To know which version of the R Markdown file created these results, you’ll want to first commit it to the Git repo. If you’re still working on the analysis, you can ignore this warning. When you’re finished, you can run <code>wflow_publish</code> to commit the R Markdown file and build the HTML.</p>
 </div>
 </div>
 </div>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree9254340fc7a442989876f2f9cd48f73253274915targetblank9254340a"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/9254340fc7a442989876f2f9cd48f73253274915" target="_blank">9254340</a> </a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021treee02ea6eafbf424c71f06c26042cacdfe704cfc23targetblanke02ea6ea"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/e02ea6eafbf424c71f06c26042cacdfe704cfc23" target="_blank">e02ea6e</a> </a>
 </p>
 </div>
-<div id="strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021tree9254340fc7a442989876f2f9cd48f73253274915targetblank9254340a" class="panel-collapse collapse">
+<div id="strongRepositoryversionstrongahrefhttpsgithubcomUCLBLICanalysisTuratiNatCancer2021treee02ea6eafbf424c71f06c26042cacdfe704cfc23targetblanke02ea6ea" class="panel-collapse collapse">
 <div class="panel-body">
 <p>
 Great! You are using Git for version control. Tracking code development and connecting the code version to the results is critical for reproducibility.
 </p>
 <p>
-The results in this page were generated with repository version <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/9254340fc7a442989876f2f9cd48f73253274915" target="_blank">9254340</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
+The results in this page were generated with repository version <a href="https://github.com/UCL-BLIC-analysis/Turati_NatCancer_2021/tree/e02ea6eafbf424c71f06c26042cacdfe704cfc23" target="_blank">e02ea6e</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
 </p>
 <p>
 Note that you need to be careful to ensure that all relevant files for the analysis have been committed to Git prior to generating the results (you can use <code>wflow_publish</code> or <code>wflow_git_commit</code>). workflowr only checks the R Markdown file, but you know if there are other scripts or data files that it depends on. Below is the status of the Git repository when the results were generated:
@@ -415,6 +415,10 @@ Ignored files:
     Ignored:    output/figures/ItemS2.pdf
     Ignored:    output/tables/ExtFig5a_bulkRNAseq_data.xlsx
     Ignored:    output/tables/ExtFig5b_bulkRNAseq_data.xlsx
+
+Unstaged changes:
+    Modified:   analysis/bulkRNA-deseq2.Rmd
+    Modified:   analysis/bulkRNA-index.Rmd
 
 </code></pre>
 <p>
@@ -453,6 +457,23 @@ Message
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/UCL-BLIC-analysis/Turati_NatCancer_2021/e02ea6eafbf424c71f06c26042cacdfe704cfc23/docs/bulkRNA-index.html" target="_blank">e02ea6e</a>
+</td>
+<td>
+Javier Herrero
+</td>
+<td>
+2021-08-16
+</td>
+<td>
+Build site.
+</td>
+</tr>
 <tr>
 <td>
 html
@@ -668,6 +689,7 @@ Init workflowr website
 <h4>1. <a href="bulkRNA-pca.html">PCA</a></h4>
 <p>This analysis is used in Figure S5A and S5B of the mss.</p>
 <p>DESeq2 uses the top 500 most variable genes by default to draw the PCA. In this case, we are using the top 1000 genes (for historical reasons).</p>
+<p><em>Generates Extended Figure 5a and Extended Figure 5b</em></p>
 </div>
 <div id="bulk-rna-seq-deseq2" class="section level4">
 <h4>2. <a href="bulkRNA-deseq2.html">Bulk RNA-seq DESeq2</a></h4>
@@ -675,10 +697,11 @@ Init workflowr website
 </div>
 <div id="bulk-rna-seq-gene-set-enrichment-analysis" class="section level4">
 <h4>3. <a href="bulkRNA-gs_enrichment.html">Bulk RNA-seq Gene Set Enrichment Analysis</a></h4>
-<p>This runs DESeq2 and stores the results in the output folder.</p>
+<p>This runs fGSEA and stores the results in the output folder.</p>
+<p><em>Generates Figure 5c</em></p>
 </div>
 
-<div id="rmd-source-code">LS0tCnRpdGxlOiAiQnVsayBSTkEtc2VxIgpvdXRwdXQ6CiAgd29ya2Zsb3dyOjp3Zmxvd19odG1sOgogICAgdG9jOiBmYWxzZQplZGl0b3Jfb3B0aW9uczoKICBjaHVua19vdXRwdXRfdHlwZTogY29uc29sZQotLS0KCiMjIyMgMS4gW1BDQV0oYnVsa1JOQS1wY2EuaHRtbCkKClRoaXMgYW5hbHlzaXMgaXMgdXNlZCBpbiBGaWd1cmUgUzVBIGFuZCBTNUIgb2YgdGhlIG1zcy4KCkRFU2VxMiB1c2VzIHRoZSB0b3AgNTAwIG1vc3QgdmFyaWFibGUgZ2VuZXMgYnkgZGVmYXVsdCB0byBkcmF3IHRoZSBQQ0EuIEluIHRoaXMgY2FzZSwgd2UgYXJlIHVzaW5nIHRoZSB0b3AgMTAwMCBnZW5lcyAoZm9yIGhpc3RvcmljYWwgcmVhc29ucykuCgoKIyMjIyAyLiBbQnVsayBSTkEtc2VxIERFU2VxMl0oYnVsa1JOQS1kZXNlcTIuaHRtbCkKClRoaXMgcnVucyBERVNlcTIgYW5kIHN0b3JlcyB0aGUgcmVzdWx0cyBpbiB0aGUgb3V0cHV0IGZvbGRlci4KCgojIyMjIDMuIFtCdWxrIFJOQS1zZXEgR2VuZSBTZXQgRW5yaWNobWVudCBBbmFseXNpc10oYnVsa1JOQS1nc19lbnJpY2htZW50Lmh0bWwpCgpUaGlzIHJ1bnMgREVTZXEyIGFuZCBzdG9yZXMgdGhlIHJlc3VsdHMgaW4gdGhlIG91dHB1dCBmb2xkZXIuCgo=</div>
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiQnVsayBSTkEtc2VxIgpvdXRwdXQ6CiAgd29ya2Zsb3dyOjp3Zmxvd19odG1sOgogICAgdG9jOiBmYWxzZQplZGl0b3Jfb3B0aW9uczoKICBjaHVua19vdXRwdXRfdHlwZTogY29uc29sZQotLS0KCiMjIyMgMS4gW1BDQV0oYnVsa1JOQS1wY2EuaHRtbCkKClRoaXMgYW5hbHlzaXMgaXMgdXNlZCBpbiBGaWd1cmUgUzVBIGFuZCBTNUIgb2YgdGhlIG1zcy4KCkRFU2VxMiB1c2VzIHRoZSB0b3AgNTAwIG1vc3QgdmFyaWFibGUgZ2VuZXMgYnkgZGVmYXVsdCB0byBkcmF3IHRoZSBQQ0EuIEluIHRoaXMgY2FzZSwgd2UgYXJlIHVzaW5nIHRoZSB0b3AgMTAwMCBnZW5lcyAoZm9yIGhpc3RvcmljYWwgcmVhc29ucykuCgoqR2VuZXJhdGVzIEV4dGVuZGVkIEZpZ3VyZSA1YSBhbmQgRXh0ZW5kZWQgRmlndXJlIDViKgoKCiMjIyMgMi4gW0J1bGsgUk5BLXNlcSBERVNlcTJdKGJ1bGtSTkEtZGVzZXEyLmh0bWwpCgpUaGlzIHJ1bnMgREVTZXEyIGFuZCBzdG9yZXMgdGhlIHJlc3VsdHMgaW4gdGhlIG91dHB1dCBmb2xkZXIuCgoKIyMjIyAzLiBbQnVsayBSTkEtc2VxIEdlbmUgU2V0IEVucmljaG1lbnQgQW5hbHlzaXNdKGJ1bGtSTkEtZ3NfZW5yaWNobWVudC5odG1sKQoKVGhpcyBydW5zIGZHU0VBIGFuZCBzdG9yZXMgdGhlIHJlc3VsdHMgaW4gdGhlIG91dHB1dCBmb2xkZXIuCgoqR2VuZXJhdGVzIEZpZ3VyZSA1YyoKCg==</div>
 
 <!-- Adjust MathJax settings so that all math formulae are shown using
 TeX fonts only; see

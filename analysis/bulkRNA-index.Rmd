@@ -13,6 +13,8 @@ This analysis is used in Figure S5A and S5B of the mss.
 
 DESeq2 uses the top 500 most variable genes by default to draw the PCA. In this case, we are using the top 1000 genes (for historical reasons).
 
+*Generates Extended Figure 5a and Extended Figure 5b*
+
 
 #### 2. [Bulk RNA-seq DESeq2](bulkRNA-deseq2.html)
 
@@ -21,5 +23,7 @@ This runs DESeq2 and stores the results in the output folder.
 
 #### 3. [Bulk RNA-seq Gene Set Enrichment Analysis](bulkRNA-gs_enrichment.html)
 
-This runs DESeq2 and stores the results in the output folder.
+This runs fGSEA and stores the results in the output folder.
+
+*Generates Figure 5c*
 

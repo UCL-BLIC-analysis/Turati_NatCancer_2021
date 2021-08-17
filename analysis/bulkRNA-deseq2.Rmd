@@ -89,7 +89,7 @@ run_DESeq2_for_combinations <- function(deseq_obj, combinations, factor, label,
 ```
 
 
-# DESeq2 object
+# Results
 
 ## Treated vs Untreated -- 3 patients
 
