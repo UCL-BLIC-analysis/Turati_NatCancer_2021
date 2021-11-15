@@ -10,5 +10,10 @@ editor_options:
 
 This site provides access to the code used in the analysis of:
 
-<a href="https://rdcu.be/cnL8X">Turati <i>et al</i>, <b>Chemotherapy induces canalization of cell state in childhood B-cell precursor acute lymphoblastic leukemia</b>, Nature Cancer, 2021.</a>
+<a href="https://rdcu.be/cnL8X">Turati <i>et al.</i>, <b>Chemotherapy induces canalization of cell state in childhood B-cell precursor acute lymphoblastic leukemia</b>, Nature Cancer, 2021.</a>
 
+Comparison of intratumor genetic heterogeneity in cancer at diagnosis and relapse suggests that chemotherapy induces bottleneck selection of subclonal genotypes. However, evolutionary events subsequent to chemotherapy could also explain changes in clonal dominance seen at relapse. We therefore investigated the mechanisms of selection in childhood B-cell precursor acute lymphoblastic leukemia (BCP-ALL) during induction chemotherapy where maximal cytoreduction occurs. To distinguish stochastic versus deterministic events, individual leukemias were transplanted into multiple xenografts and chemotherapy administered. Analyses of the immediate post-treatment leukemic residuum at single-cell resolution revealed that chemotherapy has little impact on genetic heterogeneity. Rather, it acts on extensive, previously unappreciated, transcriptional and epigenetic heterogeneity in BCP-ALL, dramatically reducing the spectrum of cell states represented, leaving a genetically polyclonal but phenotypically uniform population, with hallmark signatures relating to developmental stage, cell cycle and metabolism. Hence, canalization of the cell state accounts for a significant component of bottleneck selection during induction chemotherapy.
+
+```{r cover_figure, fig.height=11, fig.width=8}
+source("code/cover.R")
+```
